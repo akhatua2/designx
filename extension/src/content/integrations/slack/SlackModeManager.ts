@@ -67,11 +67,12 @@ export class SlackModeManager implements IntegrationManager {
   private onAuthStateChangeCallbacks: ((isAuthenticated: boolean, user?: SlackUser) => void)[] = []
 
   // Slack OAuth configuration
-  private readonly CLIENT_ID = 'YOUR_SLACK_CLIENT_ID'
+  private readonly CLIENT_ID = '8801814161477.9032177471110'
   private readonly REDIRECT_URI = 'https://designx-705035175306.us-central1.run.app/api/slack/callback'
   private readonly SCOPES = [
     'channels:read',
-    'channels:write',
+    'channels:write.invites',
+    'channels:write.topic',
     'chat:write',
     'groups:read',
     'reactions:read',

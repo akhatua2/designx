@@ -16,7 +16,8 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: List[str] = [
         "chrome-extension://*",
         "http://localhost:8000",
-        "http://localhost:3000"
+        "http://localhost:3000",
+        "*"
     ]
     CORS_ALLOW_CREDENTIALS: bool = True
     CORS_ALLOW_METHODS: List[str] = ["*"]
