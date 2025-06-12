@@ -1,6 +1,5 @@
-# 
+
 # --- Builder Stage ---
-#
 FROM python:3.9-slim as builder
 
 # Set the working directory
