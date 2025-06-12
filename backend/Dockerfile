@@ -20,7 +20,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN git clone https://github.com/SWE-agent/SWE-agent.git /app/SWE-agent \
     && cd /app/SWE-agent \
     && python -m pip install --upgrade pip \
-    && pip install --editable . \
+    && pip install --editable .
 
 # Copy the rest of the application
 COPY . .
