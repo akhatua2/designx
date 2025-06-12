@@ -6,6 +6,14 @@ from pydantic import BaseModel
 from config import settings
 import os
 import subprocess
+import logging
+
+# Configure logging for Cloud Run
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="DesignX Extension API",
@@ -76,24 +84,24 @@ async def exchange_github_token(request: TokenRequest):
     """
     Exchange GitHub OAuth authorization code for access token
     """
-    print(f"🔄 Received token exchange request")
-    print(f"🔧 Authorization code length: {len(request.code)}")
+    logger.info("🔄 Received token exchange request")
+    logger.info(f"🔧 Authorization code length: {len(request.code)}")
     
     try:
         github_client_id = settings.GITHUB_CLIENT_ID
         github_client_secret = settings.GITHUB_CLIENT_SECRET
         
-        print(f"🔧 GitHub Client ID: {github_client_id}")
-        print(f"🔧 GitHub Client Secret configured: {'Yes' if github_client_secret else 'No'}")
+        logger.info(f"🔧 GitHub Client ID: {github_client_id}")
+        logger.info(f"🔧 GitHub Client Secret configured: {'Yes' if github_client_secret else 'No'}")
         
         if not github_client_id or not github_client_secret:
-            print("❌ GitHub credentials not configured")
+            logger.error("❌ GitHub credentials not configured")
             raise HTTPException(
                 status_code=500, 
                 detail="GitHub credentials not configured"
             )
         
-        print("📡 Making request to GitHub token endpoint...")
+        logger.info("📡 Making request to GitHub token endpoint...")
         # Exchange code for access token with GitHub
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -106,8 +114,8 @@ async def exchange_github_token(request: TokenRequest):
                 headers={"Accept": "application/json"}
             )
             
-        print(f"📡 GitHub response status: {response.status_code}")
-        print(f"📡 GitHub response body: {response.text}")
+        logger.info(f"📡 GitHub response status: {response.status_code}")
+        logger.info(f"📡 GitHub response body: {response.text}")
         
         if response.status_code != 200:
             error_msg = f"GitHub API error: {response.status_code}"
@@ -120,23 +128,23 @@ async def exchange_github_token(request: TokenRequest):
             except:
                 pass
             
-            print(f"❌ GitHub API error: {error_msg}")
+            logger.error(f"❌ GitHub API error: {error_msg}")
             raise HTTPException(status_code=400, detail=error_msg)
             
         token_data = response.json()
-        print(f"📄 GitHub response data keys: {list(token_data.keys())}")
+        logger.info(f"📄 GitHub response data keys: {list(token_data.keys())}")
         
         # Check for GitHub API errors
         if "error" in token_data:
             error_msg = token_data.get("error_description", token_data["error"])
-            print(f"❌ GitHub OAuth error: {error_msg}")
+            logger.error(f"❌ GitHub OAuth error: {error_msg}")
             raise HTTPException(status_code=400, detail=f"GitHub OAuth error: {error_msg}")
         
         if "access_token" not in token_data:
-            print("❌ No access token in GitHub response")
+            logger.error("❌ No access token in GitHub response")
             raise HTTPException(status_code=400, detail="No access token received from GitHub")
             
-        print("✅ Token exchange successful")
+        logger.info("✅ Token exchange successful")
         return TokenResponse(
             access_token=token_data["access_token"],
             token_type="bearer"
@@ -145,7 +153,7 @@ async def exchange_github_token(request: TokenRequest):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Unexpected error in token exchange: {str(e)}")
+        logger.error(f"❌ Unexpected error in token exchange: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @app.get("/api/github/callback", response_class=HTMLResponse)
@@ -153,12 +161,12 @@ async def github_oauth_callback(code: str = None, error: str = None):
     """
     GitHub OAuth callback endpoint - redirects to success page with parameters
     """
-    print(f"🔄 OAuth callback received")
-    print(f"🔧 Code present: {'Yes' if code else 'No'}")
-    print(f"🔧 Error present: {'Yes' if error else 'No'}")
+    logger.info("🔄 OAuth callback received")
+    logger.info(f"🔧 Code present: {'Yes' if code else 'No'}")
+    logger.info(f"🔧 Error present: {'Yes' if error else 'No'}")
     
     if error:
-        print(f"❌ OAuth callback error: {error}")
+        logger.error(f"❌ OAuth callback error: {error}")
         return f"""
         <html>
             <head><title>GitHub Auth Error</title></head>
@@ -172,7 +180,7 @@ async def github_oauth_callback(code: str = None, error: str = None):
         """
     
     if code:
-        print(f"✅ OAuth callback successful, redirecting with code")
+        logger.info(f"✅ OAuth callback successful, redirecting with code")
         return f"""
         <html>
             <head><title>GitHub Auth Success</title></head>
@@ -185,7 +193,7 @@ async def github_oauth_callback(code: str = None, error: str = None):
         </html>
         """
     
-    print("❌ OAuth callback missing code and error")
+    logger.error("❌ OAuth callback missing code and error")
     raise HTTPException(status_code=400, detail="Missing authorization code or error")
 
 @app.get("/auth/github/success", response_class=HTMLResponse)
@@ -193,12 +201,12 @@ async def github_auth_success(code: str = None, error: str = None):
     """
     Success page that the extension can detect
     """
-    print(f"🎯 GitHub auth success page accessed")
-    print(f"🔧 Code present: {'Yes' if code else 'No'}")
-    print(f"🔧 Error present: {'Yes' if error else 'No'}")
+    logger.info("🎯 GitHub auth success page accessed")
+    logger.info(f"🔧 Code present: {'Yes' if code else 'No'}")
+    logger.info(f"🔧 Error present: {'Yes' if error else 'No'}")
     
     if error:
-        print(f"❌ Auth success page with error: {error}")
+        logger.error(f"❌ Auth success page with error: {error}")
         return f"""
         <html>
             <head>
@@ -240,7 +248,7 @@ async def github_auth_success(code: str = None, error: str = None):
         """
     
     if code:
-        print(f"✅ Auth success page with code, sending message to parent window")
+        logger.info(f"✅ Auth success page with code, sending message to parent window")
         return f"""
         <html>
             <head>
@@ -281,7 +289,7 @@ async def github_auth_success(code: str = None, error: str = None):
         </html>
         """
     
-    print("❌ Auth success page accessed without code or error")
+    logger.error("❌ Auth success page accessed without code or error")
     raise HTTPException(status_code=400, detail="Missing authorization code")
 
 @app.get("/api/github/user")
@@ -318,26 +326,26 @@ async def exchange_slack_token(request: SlackTokenRequest):
     """
     Exchange Slack OAuth authorization code for access token
     """
-    print(f"🔄 Received Slack token exchange request")
-    print(f"🔧 Authorization code length: {len(request.code)}")
+    logger.info("🔄 Received Slack token exchange request")
+    logger.info(f"🔧 Authorization code length: {len(request.code)}")
     
     try:
         slack_client_id = settings.SLACK_CLIENT_ID
         slack_client_secret = settings.SLACK_CLIENT_SECRET
         slack_redirect_uri = settings.SLACK_REDIRECT_URI
         
-        print(f"🔧 Slack Client ID: {slack_client_id}")
-        print(f"🔧 Slack Client Secret configured: {'Yes' if slack_client_secret else 'No'}")
-        print(f"🔧 Slack Redirect URI: {slack_redirect_uri}")
+        logger.info(f"🔧 Slack Client ID: {slack_client_id}")
+        logger.info(f"🔧 Slack Client Secret configured: {'Yes' if slack_client_secret else 'No'}")
+        logger.info(f"�� Slack Redirect URI: {slack_redirect_uri}")
         
         if not slack_client_id or not slack_client_secret:
-            print("❌ Slack credentials not configured")
+            logger.error("❌ Slack credentials not configured")
             raise HTTPException(
                 status_code=500, 
                 detail="Slack credentials not configured"
             )
         
-        print("📡 Making request to Slack token endpoint...")
+        logger.info("📡 Making request to Slack token endpoint...")
         # Exchange code for access token with Slack
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -350,8 +358,8 @@ async def exchange_slack_token(request: SlackTokenRequest):
                 }
             )
             
-        print(f"📡 Slack response status: {response.status_code}")
-        print(f"📡 Slack response body: {response.text}")
+        logger.info(f"📡 Slack response status: {response.status_code}")
+        logger.info(f"📡 Slack response body: {response.text}")
         
         if response.status_code != 200:
             error_msg = f"Slack API error: {response.status_code}"
@@ -362,23 +370,23 @@ async def exchange_slack_token(request: SlackTokenRequest):
             except:
                 pass
             
-            print(f"❌ Slack API error: {error_msg}")
+            logger.error(f"❌ Slack API error: {error_msg}")
             raise HTTPException(status_code=400, detail=error_msg)
             
         token_data = response.json()
-        print(f"📄 Slack response data keys: {list(token_data.keys())}")
+        logger.info(f"📄 Slack response data keys: {list(token_data.keys())}")
         
         # Check for Slack API errors
         if not token_data.get("ok"):
             error_msg = token_data.get("error", "Unknown error")
-            print(f"❌ Slack OAuth error: {error_msg}")
+            logger.error(f"❌ Slack OAuth error: {error_msg}")
             raise HTTPException(status_code=400, detail=f"Slack OAuth error: {error_msg}")
         
         if "access_token" not in token_data:
-            print("❌ No access token in Slack response")
+            logger.error("❌ No access token in Slack response")
             raise HTTPException(status_code=400, detail="No access token received from Slack")
             
-        print("✅ Slack token exchange successful")
+        logger.info("✅ Slack token exchange successful")
         return SlackTokenResponse(
             access_token=token_data["access_token"],
             team=token_data.get("team", {}),
@@ -388,7 +396,7 @@ async def exchange_slack_token(request: SlackTokenRequest):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Unexpected error in Slack token exchange: {str(e)}")
+        logger.error(f"❌ Unexpected error in Slack token exchange: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @app.get("/api/slack/callback", response_class=HTMLResponse)
@@ -396,12 +404,12 @@ async def slack_oauth_callback(code: str = None, error: str = None):
     """
     Slack OAuth callback endpoint - redirects to success page with parameters
     """
-    print(f"🔄 Slack OAuth callback received")
-    print(f"🔧 Code present: {'Yes' if code else 'No'}")
-    print(f"🔧 Error present: {'Yes' if error else 'No'}")
+    logger.info("🔄 Slack OAuth callback received")
+    logger.info(f"🔧 Code present: {'Yes' if code else 'No'}")
+    logger.info(f"🔧 Error present: {'Yes' if error else 'No'}")
     
     if error:
-        print(f"❌ Slack OAuth callback error: {error}")
+        logger.error(f"❌ Slack OAuth callback error: {error}")
         return f"""
         <html>
             <head><title>Slack Auth Error</title></head>
@@ -415,7 +423,7 @@ async def slack_oauth_callback(code: str = None, error: str = None):
         """
     
     if code:
-        print(f"✅ Slack OAuth callback successful, redirecting with code")
+        logger.info(f"✅ Slack OAuth callback successful, redirecting with code")
         return f"""
         <html>
             <head><title>Slack Auth Success</title></head>
@@ -428,7 +436,7 @@ async def slack_oauth_callback(code: str = None, error: str = None):
         </html>
         """
     
-    print("❌ Slack OAuth callback missing code and error")
+    logger.error("❌ Slack OAuth callback missing code and error")
     raise HTTPException(status_code=400, detail="Missing authorization code or error")
 
 @app.get("/auth/slack/success", response_class=HTMLResponse)
@@ -436,12 +444,12 @@ async def slack_auth_success(code: str = None, error: str = None):
     """
     Success page that the extension can detect
     """
-    print(f"🎯 Slack auth success page accessed")
-    print(f"🔧 Code present: {'Yes' if code else 'No'}")
-    print(f"🔧 Error present: {'Yes' if error else 'No'}")
+    logger.info("🎯 Slack auth success page accessed")
+    logger.info(f"🔧 Code present: {'Yes' if code else 'No'}")
+    logger.info(f"🔧 Error present: {'Yes' if error else 'No'}")
     
     if error:
-        print(f"❌ Auth success page with error: {error}")
+        logger.error(f"❌ Auth success page with error: {error}")
         return f"""
         <html>
             <head>
@@ -483,7 +491,7 @@ async def slack_auth_success(code: str = None, error: str = None):
         """
     
     if code:
-        print(f"✅ Auth success page with code, sending message to parent window")
+        logger.info(f"✅ Auth success page with code, sending message to parent window")
         return f"""
         <html>
             <head>
@@ -524,7 +532,7 @@ async def slack_auth_success(code: str = None, error: str = None):
         </html>
         """
     
-    print("❌ Auth success page accessed without code or error")
+    logger.error("❌ Auth success page accessed without code or error")
     raise HTTPException(status_code=400, detail="Missing authorization code")
 
 @app.post("/api/jira/exchange", response_model=JiraTokenResponse)
@@ -532,26 +540,26 @@ async def exchange_jira_token(request: JiraTokenRequest):
     """
     Exchange Jira OAuth authorization code for access token
     """
-    print(f"🔄 Received Jira token exchange request")
-    print(f"🔧 Authorization code length: {len(request.code)}")
+    logger.info("🔄 Received Jira token exchange request")
+    logger.info(f"�� Authorization code length: {len(request.code)}")
     
     try:
         jira_client_id = settings.JIRA_CLIENT_ID if hasattr(settings, 'JIRA_CLIENT_ID') else None
         jira_client_secret = settings.JIRA_CLIENT_SECRET if hasattr(settings, 'JIRA_CLIENT_SECRET') else None
         jira_redirect_uri = settings.JIRA_REDIRECT_URI if hasattr(settings, 'JIRA_REDIRECT_URI') else None
         
-        print(f"🔧 Jira Client ID: {jira_client_id}")
-        print(f"🔧 Jira Client Secret configured: {'Yes' if jira_client_secret else 'No'}")
-        print(f"🔧 Jira Redirect URI: {jira_redirect_uri}")
+        logger.info(f"🔧 Jira Client ID: {jira_client_id}")
+        logger.info(f"🔧 Jira Client Secret configured: {'Yes' if jira_client_secret else 'No'}")
+        logger.info(f"🔧 Jira Redirect URI: {jira_redirect_uri}")
         
         if not jira_client_id or not jira_client_secret:
-            print("❌ Jira credentials not configured")
+            logger.error("❌ Jira credentials not configured")
             raise HTTPException(
                 status_code=500, 
                 detail="Jira credentials not configured"
             )
         
-        print("📡 Making request to Jira token endpoint...")
+        logger.info("📡 Making request to Jira token endpoint...")
         # Exchange code for access token with Jira
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -568,8 +576,8 @@ async def exchange_jira_token(request: JiraTokenRequest):
                 }
             )
             
-        print(f"📡 Jira response status: {response.status_code}")
-        print(f"📡 Jira response body: {response.text}")
+        logger.info(f"📡 Jira response status: {response.status_code}")
+        logger.info(f"📡 Jira response body: {response.text}")
         
         if response.status_code != 200:
             error_msg = f"Jira API error: {response.status_code}"
@@ -582,23 +590,23 @@ async def exchange_jira_token(request: JiraTokenRequest):
             except:
                 pass
             
-            print(f"❌ Jira API error: {error_msg}")
+            logger.error(f"❌ Jira API error: {error_msg}")
             raise HTTPException(status_code=400, detail=error_msg)
             
         token_data = response.json()
-        print(f"📄 Jira response data keys: {list(token_data.keys())}")
+        logger.info(f"📄 Jira response data keys: {list(token_data.keys())}")
         
         # Check for Jira API errors
         if "error" in token_data:
             error_msg = token_data.get("error_description", token_data["error"])
-            print(f"❌ Jira OAuth error: {error_msg}")
+            logger.error(f"❌ Jira OAuth error: {error_msg}")
             raise HTTPException(status_code=400, detail=f"Jira OAuth error: {error_msg}")
         
         if "access_token" not in token_data:
-            print("❌ No access token in Jira response")
+            logger.error("❌ No access token in Jira response")
             raise HTTPException(status_code=400, detail="No access token received from Jira")
             
-        print("✅ Jira token exchange successful")
+        logger.info("✅ Jira token exchange successful")
         return JiraTokenResponse(
             access_token=token_data["access_token"],
             refresh_token=token_data.get("refresh_token", ""),
@@ -609,7 +617,7 @@ async def exchange_jira_token(request: JiraTokenRequest):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Unexpected error in Jira token exchange: {str(e)}")
+        logger.error(f"❌ Unexpected error in Jira token exchange: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @app.get("/api/jira/callback", response_class=HTMLResponse)
@@ -617,12 +625,12 @@ async def jira_oauth_callback(code: str = None, error: str = None):
     """
     Jira OAuth callback endpoint - redirects to success page with parameters
     """
-    print(f"🔄 Jira OAuth callback received")
-    print(f"🔧 Code present: {'Yes' if code else 'No'}")
-    print(f"🔧 Error present: {'Yes' if error else 'No'}")
+    logger.info("🔄 Jira OAuth callback received")
+    logger.info(f"🔧 Code present: {'Yes' if code else 'No'}")
+    logger.info(f"🔧 Error present: {'Yes' if error else 'No'}")
     
     if error:
-        print(f"❌ Jira OAuth callback error: {error}")
+        logger.error(f"❌ Jira OAuth callback error: {error}")
         return f"""
         <html>
             <head><title>Jira Auth Error</title></head>
@@ -636,7 +644,7 @@ async def jira_oauth_callback(code: str = None, error: str = None):
         """
     
     if code:
-        print(f"✅ Jira OAuth callback successful, redirecting with code")
+        logger.info(f"✅ Jira OAuth callback successful, redirecting with code")
         return f"""
         <html>
             <head><title>Jira Auth Success</title></head>
@@ -649,7 +657,7 @@ async def jira_oauth_callback(code: str = None, error: str = None):
         </html>
         """
     
-    print("❌ Jira OAuth callback missing code and error")
+    logger.error("❌ Jira OAuth callback missing code and error")
     raise HTTPException(status_code=400, detail="Missing authorization code or error")
 
 @app.get("/auth/jira/success", response_class=HTMLResponse)
@@ -657,12 +665,12 @@ async def jira_auth_success(code: str = None, error: str = None):
     """
     Success page that the extension can detect
     """
-    print(f"🎯 Jira auth success page accessed")
-    print(f"🔧 Code present: {'Yes' if code else 'No'}")
-    print(f"🔧 Error present: {'Yes' if error else 'No'}")
+    logger.info("🎯 Jira auth success page accessed")
+    logger.info(f"🔧 Code present: {'Yes' if code else 'No'}")
+    logger.info(f"🔧 Error present: {'Yes' if error else 'No'}")
     
     if error:
-        print(f"❌ Auth success page with error: {error}")
+        logger.error(f"❌ Auth success page with error: {error}")
         return f"""
         <html>
             <head>
@@ -704,7 +712,7 @@ async def jira_auth_success(code: str = None, error: str = None):
         """
     
     if code:
-        print(f"✅ Auth success page with code, sending message to parent window")
+        logger.info(f"✅ Auth success page with code, sending message to parent window")
         return f"""
         <html>
             <head>
@@ -745,7 +753,7 @@ async def jira_auth_success(code: str = None, error: str = None):
         </html>
         """
     
-    print("❌ Auth success page accessed without code or error")
+    logger.error("❌ Auth success page accessed without code or error")
     raise HTTPException(status_code=400, detail="Missing authorization code")
 
 @app.post("/api/run-sweagent")
@@ -754,20 +762,20 @@ async def run_sweagent(request: RunSWEAgentRequest):
     Run SWE-agent command (it will deploy itself to Modal)
     """
     try:
-        print(f"🚀 SWE-agent trigger requested:")
-        print(f"   Repository: {request.repo_url}")
-        print(f"   Issue: {request.issue_url}")
-        print(f"   GitHub token provided: {'Yes' if request.github_token else 'No'}")
-        print(f"   OpenAI API key configured: {'Yes' if settings.OPENAI_API_KEY else 'No'}")
-        print(f"   Modal token configured: {'Yes' if settings.MODAL_TOKEN_ID else 'No'}")
+        logger.info("🚀 SWE-agent trigger requested:")
+        logger.info(f"   Repository: {request.repo_url}")
+        logger.info(f"   Issue: {request.issue_url}")
+        logger.info(f"   GitHub token provided: {'Yes' if request.github_token else 'No'}")
+        logger.info(f"   OpenAI API key configured: {'Yes' if settings.OPENAI_API_KEY else 'No'}")
+        logger.info(f"   Modal token configured: {'Yes' if settings.MODAL_TOKEN_ID else 'No'}")
         
         # Check if sweagent command exists
         import shutil
         sweagent_path = shutil.which("sweagent")
-        print(f"🔍 sweagent command found at: {sweagent_path}")
+        logger.info(f"🔍 sweagent command found at: {sweagent_path}")
         
         if not sweagent_path:
-            print("❌ sweagent command not found in PATH")
+            logger.error("❌ sweagent command not found in PATH")
             return {
                 "status": "error",
                 "message": "sweagent command not found in PATH"
@@ -781,6 +789,7 @@ async def run_sweagent(request: RunSWEAgentRequest):
             "MODAL_TOKEN_ID": settings.MODAL_TOKEN_ID,
             "MODAL_TOKEN_SECRET": settings.MODAL_TOKEN_SECRET
         })
+        logger.info(f"🔧 Environment variables set: {env}")
         
         # Build the SWE-agent command
         # First try without Modal deployment to see if that's the issue
@@ -794,9 +803,11 @@ async def run_sweagent(request: RunSWEAgentRequest):
             f"--problem_statement.github_url={request.issue_url}"
         ]
         
-        print(f"🚀 Executing command: {' '.join(cmd)}")
-        print(f"🔧 Environment variables set: GITHUB_TOKEN, OPENAI_API_KEY, MODAL_TOKEN_ID, MODAL_TOKEN_SECRET")
-        print(f"🔧 Working directory: /app/SWE-agent")
+        logger.info(f"Command: {cmd}")
+        
+        logger.info(f"🚀 Executing command: {' '.join(cmd)}")
+        logger.info(f"🔧 Environment variables set: GITHUB_TOKEN, OPENAI_API_KEY, MODAL_TOKEN_ID, MODAL_TOKEN_SECRET")
+        logger.info(f"🔧 Working directory: /app/SWE-agent")
         
         # First, let's try to run sweagent --help to see if it works
         try:
@@ -807,16 +818,16 @@ async def run_sweagent(request: RunSWEAgentRequest):
                 timeout=30,
                 cwd="/app/SWE-agent"
             )
-            print(f"📋 sweagent --help exit code: {help_result.returncode}")
+            logger.info(f"📋 sweagent --help exit code: {help_result.returncode}")
             if help_result.stdout:
-                print(f"📋 sweagent --help stdout: {help_result.stdout[:500]}...")
+                logger.info(f"📋 sweagent --help stdout: {help_result.stdout[:500]}...")
             if help_result.stderr:
-                print(f"⚠️ sweagent --help stderr: {help_result.stderr[:500]}...")
+                logger.warning(f"⚠️ sweagent --help stderr: {help_result.stderr[:500]}...")
         except Exception as e:
-            print(f"❌ Error running sweagent --help: {str(e)}")
+            logger.error(f"❌ Error running sweagent --help: {str(e)}")
         
         # Run the actual command with better monitoring
-        print("🚀 Starting SWE-agent process...")
+        logger.info("🚀 Starting SWE-agent process...")
         process = subprocess.Popen(
             cmd,
             env=env,
@@ -828,7 +839,7 @@ async def run_sweagent(request: RunSWEAgentRequest):
             cwd="/app/SWE-agent"  # Run from SWE-agent directory
         )
         
-        print(f"✅ SWE-agent process started with PID: {process.pid}")
+        logger.info(f"✅ SWE-agent process started with PID: {process.pid}")
         
         # Start a background task to monitor the process
         import asyncio
@@ -837,7 +848,7 @@ async def run_sweagent(request: RunSWEAgentRequest):
         
         def monitor_process():
             try:
-                print("🔍 Starting process monitor...")
+                logger.info("🔍 Starting process monitor...")
                 
                 # Monitor for a few seconds to capture initial output
                 start_time = time.time()
@@ -849,7 +860,7 @@ async def run_sweagent(request: RunSWEAgentRequest):
                 while time.time() - start_time < 60:
                     # Check if process is still running
                     if process.poll() is not None:
-                        print(f"🏁 Process terminated early with return code: {process.returncode}")
+                        logger.info(f"🏁 Process terminated early with return code: {process.returncode}")
                         break
                     
                     # Read stdout
@@ -859,7 +870,7 @@ async def run_sweagent(request: RunSWEAgentRequest):
                         if line:
                             line = line.strip()
                             stdout_lines.append(line)
-                            print(f"📄 SWE-agent STDOUT: {line}")
+                            logger.info(f"📄 SWE-agent STDOUT: {line}")
                             last_output_time = time.time()
                             output_found = True
                     except:
@@ -871,7 +882,7 @@ async def run_sweagent(request: RunSWEAgentRequest):
                         if line:
                             line = line.strip()
                             stderr_lines.append(line)
-                            print(f"⚠️ SWE-agent STDERR: {line}")
+                            logger.warning(f"⚠️ SWE-agent STDERR: {line}")
                             last_output_time = time.time()
                             output_found = True
                     except:
@@ -879,13 +890,13 @@ async def run_sweagent(request: RunSWEAgentRequest):
                     
                     # Check if we haven't seen output for 30 seconds
                     if time.time() - last_output_time > 30:
-                        print("⚠️ No output for 30 seconds - process may be hanging")
-                        print("🔍 Checking if this is a Modal deployment issue...")
+                        logger.warning("⚠️ No output for 30 seconds - process may be hanging")
+                        logger.warning("🔍 Checking if this is a Modal deployment issue...")
                         
                         # Try to terminate the process
                         try:
                             process.terminate()
-                            print("🛑 Terminated hanging process")
+                            logger.info("🛑 Terminated hanging process")
                         except:
                             pass
                         break
@@ -895,23 +906,23 @@ async def run_sweagent(request: RunSWEAgentRequest):
                 
                 # After monitoring period, check final status
                 if process.poll() is None:
-                    print("⏰ Process still running after monitoring period")
-                    print("🔍 This might be normal for long-running SWE-agent tasks")
+                    logger.warning("⏰ Process still running after monitoring period")
+                    logger.warning("🔍 This might be normal for long-running SWE-agent tasks")
                 else:
-                    print(f"🏁 Final process status: {process.returncode}")
+                    logger.info(f"🏁 Final process status: {process.returncode}")
                     
                     # Get any remaining output
                     try:
                         remaining_stdout, remaining_stderr = process.communicate(timeout=5)
                         if remaining_stdout:
-                            print(f"📄 Final STDOUT: {remaining_stdout}")
+                            logger.info(f"📄 Final STDOUT: {remaining_stdout}")
                         if remaining_stderr:
-                            print(f"⚠️ Final STDERR: {remaining_stderr}")
+                            logger.warning(f"⚠️ Final STDERR: {remaining_stderr}")
                     except:
                         pass
                 
             except Exception as e:
-                print(f"❌ Error monitoring SWE-agent process: {str(e)}")
+                logger.error(f"❌ Error monitoring SWE-agent process: {str(e)}")
                 import traceback
                 traceback.print_exc()
         
@@ -929,7 +940,7 @@ async def run_sweagent(request: RunSWEAgentRequest):
         }
         
     except Exception as e:
-        print(f"❌ Error in SWE-agent trigger: {str(e)}")
+        logger.error(f"❌ Error in SWE-agent trigger: {str(e)}")
         import traceback
         traceback.print_exc()
         
