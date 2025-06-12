@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { MessageCircle, Edit3, Github } from 'lucide-react'
 import { editModeManager } from './edit-mode'
 import { commentModeManager, type SelectedElement, CommentBubble } from './comment-mode'
+import { gitHubModeManager, type GitHubUser, type GitHubRepo, GitHubBubble } from './github-mode'
 
 // Inline styles to ensure the component works even if Tailwind doesn't load
 const styles = {
@@ -27,6 +28,9 @@ const styles = {
 const FloatingIcon: React.FC = () => {
   const [selectedIcon, setSelectedIcon] = useState<string | null>(null)
   const [selectedElement, setSelectedElement] = useState<SelectedElement | null>(null)
+  const [isGitHubAuthenticated, setIsGitHubAuthenticated] = useState(false)
+  const [gitHubUser, setGitHubUser] = useState<GitHubUser | null>(null)
+  const [gitHubRepos, setGitHubRepos] = useState<GitHubRepo[]>([])
   const selectedIconRef = useRef<string | null>(null)
 
   // Keep ref in sync with state
@@ -37,8 +41,9 @@ const FloatingIcon: React.FC = () => {
     // Register callback to sync UI state with edit mode state
     editModeManager.onStateChange((isActive) => {
       if (isActive) {
-        // Deactivate comment mode if edit mode is activated
+        // Deactivate other modes if edit mode is activated
         commentModeManager.deactivate()
+        gitHubModeManager.deactivate()
         setSelectedIcon('edit')
         setSelectedElement(null) // Clear comment bubble
       } else if (selectedIconRef.current === 'edit') {
@@ -49,12 +54,26 @@ const FloatingIcon: React.FC = () => {
     // Register callback to sync UI state with comment mode state
     commentModeManager.onStateChange((isActive) => {
       if (isActive) {
-        // Deactivate edit mode if comment mode is activated
+        // Deactivate other modes if comment mode is activated
         editModeManager.deactivate()
+        gitHubModeManager.deactivate()
         setSelectedIcon('comment')
       } else if (selectedIconRef.current === 'comment') {
         setSelectedIcon(null)
         setSelectedElement(null) // Clear comment bubble when comment mode deactivates
+      }
+    })
+
+    // Register callback to sync UI state with GitHub mode state
+    gitHubModeManager.onStateChange((isActive) => {
+      if (isActive) {
+        // Deactivate other modes if GitHub mode is activated
+        editModeManager.deactivate()
+        commentModeManager.deactivate()
+        setSelectedIcon('github')
+        setSelectedElement(null) // Clear comment bubble
+      } else if (selectedIconRef.current === 'github') {
+        setSelectedIcon(null)
       }
     })
 
@@ -63,19 +82,31 @@ const FloatingIcon: React.FC = () => {
       setSelectedElement(elementData)
     })
 
+    // Register callback for GitHub authentication state
+    gitHubModeManager.onAuthStateChange((isAuthenticated, user) => {
+      setIsGitHubAuthenticated(isAuthenticated)
+      setGitHubUser(user || null)
+      if (isAuthenticated) {
+        setGitHubRepos(gitHubModeManager.getRepositories())
+      } else {
+        setGitHubRepos([])
+      }
+    })
+
+    // Check for existing GitHub authentication on load
+    gitHubModeManager.checkExistingAuth()
+
     return () => {
       editModeManager.cleanup()
       commentModeManager.cleanup()
+      gitHubModeManager.cleanup()
     }
   }, []) // Remove selectedIcon dependency
 
   const handleGitHub = () => {
     console.log('Github feature activated!')
-    // Deactivate other modes when switching to GitHub
-    editModeManager.deactivate()
-    commentModeManager.deactivate()
-    setSelectedElement(null)
-    setSelectedIcon(selectedIcon === 'github' ? null : 'github')
+    gitHubModeManager.toggle()
+    // Note: selectedIcon state will be updated via the onStateChange callback
   }
 
   const handleComment = () => {
@@ -111,12 +142,47 @@ const FloatingIcon: React.FC = () => {
     }
   }
 
+  const handleGitHubAuthenticate = async () => {
+    const success = await gitHubModeManager.authenticate()
+    if (success) {
+      setGitHubRepos(gitHubModeManager.getRepositories())
+    }
+  }
+
+  const handleGitHubLogout = async () => {
+    await gitHubModeManager.logout()
+  }
+
+  const handleGitHubClose = () => {
+    gitHubModeManager.deactivate()
+  }
+
+  const handleGitHubRepoSelect = (repo: GitHubRepo) => {
+    console.log('🐙 Repository selected:', repo.full_name)
+    console.log('Repository URL:', repo.html_url)
+    console.log('---')
+    // Here you would handle repository selection
+    // Maybe open in new tab or perform some action
+    window.open(repo.html_url, '_blank')
+  }
+
   return (
     <>
       <CommentBubble
         selectedElement={selectedElement}
         onClose={handleCommentClose}
         onSubmit={handleCommentSubmit}
+      />
+      
+      <GitHubBubble
+        isVisible={selectedIcon === 'github'}
+        isAuthenticated={isGitHubAuthenticated}
+        user={gitHubUser}
+        repos={gitHubRepos}
+        onClose={handleGitHubClose}
+        onAuthenticate={handleGitHubAuthenticate}
+        onLogout={handleGitHubLogout}
+        onSelectRepo={handleGitHubRepoSelect}
       />
       
       <div 
