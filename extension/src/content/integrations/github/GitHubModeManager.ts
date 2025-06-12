@@ -1,4 +1,35 @@
-export interface GitHubRepo {
+import type { 
+  IntegrationManager, 
+  Project, 
+  UserProfile, 
+  Issue
+} from '../IntegrationManager'
+
+// --- Internal Data Models ---
+// These extend the generic interfaces and are used within the application.
+
+export interface GitHubRepo extends Project {
+  full_name: string
+  private: boolean
+  stargazers_count: number
+  language: string | null
+}
+
+export interface GitHubUser extends UserProfile {}
+
+export interface GitHubIssue extends Issue {
+  user: {
+    login: string
+    avatar_url: string
+  }
+  created_at: string
+  state: string
+}
+
+// --- Raw API Response Types ---
+// These match the structure of the data returned by the GitHub API.
+
+interface GitHubApiRepo {
   id: number
   name: string
   full_name: string
@@ -9,26 +40,24 @@ export interface GitHubRepo {
   language: string | null
 }
 
-export interface GitHubUser {
-  login: string
-  name: string
-  avatar_url: string
-  html_url: string
-}
-
-export interface GitHubIssue {
-  number: number
-  title: string
-  html_url: string
+// Minimal API issue type needed for fetching
+interface GitHubApiIssue {
+  id: number;
+  number: number;
+  title: string;
+  html_url: string;
   user: {
-    login: string
-    avatar_url: string
-  }
-  created_at: string
-  state: string
+    login: string;
+    avatar_url: string;
+  };
+  created_at: string;
+  state: string;
+  pull_request?: object; // Used to filter out pull requests
 }
 
-export class GitHubModeManager {
+export class GitHubModeManager implements IntegrationManager {
+  public readonly name = 'GitHub';
+
   private isActive = false
   private isAuthenticated = false
   private user: GitHubUser | null = null
@@ -254,10 +283,12 @@ export class GitHubModeManager {
       console.log('✅ User data fetched:', this.user?.login)
     } else {
       console.error('❌ Failed to fetch user data:', response.status)
+      // On failure, invalidate the session
+      this.logout()
     }
   }
 
-  private async fetchRepositories(token: string): Promise<void> {
+  private async fetchRepositories(token: string): Promise<GitHubRepo[]> {
     console.log('📚 Fetching GitHub repositories...')
     const response = await fetch('https://api.github.com/user/repos?sort=updated&per_page=20', {
       headers: { 'Authorization': `token ${token}` }
@@ -266,27 +297,40 @@ export class GitHubModeManager {
     console.log('📡 GitHub repos API response status:', response.status)
     
     if (response.ok) {
-      this.repos = await response.json()
+      const apiRepos: GitHubApiRepo[] = await response.json()
+      // Adapt the API response to our internal data model
+      this.repos = apiRepos.map(repo => ({
+        ...repo,
+        url: repo.html_url // Map html_url to url
+      }))
       console.log('✅ Repositories fetched:', this.repos.length, 'repos')
+      return this.repos
     } else {
       console.error('❌ Failed to fetch repositories:', response.status)
+      return []
     }
   }
 
   public async checkExistingAuth(): Promise<boolean> {
     const token = await this.getStoredToken()
     if (token) {
-      try {
-        await this.fetchUserData(token)
-        await this.fetchRepositories(token)
+      this.token = token
+      await this.fetchUserData(this.token)
+      
+      if (this.user) {
+        await this.fetchRepositories(this.token)
         this.isAuthenticated = true
         this.notifyAuthStateChange()
         return true
-      } catch (error) {
-        // Token might be expired, clear it
-        await this.clearStoredToken()
       }
     }
+    
+    // If any step failed, ensure we are in a logged-out state
+    this.isAuthenticated = false
+    this.token = null
+    this.user = null
+    this.repos = []
+    this.notifyAuthStateChange() // Notify listeners of the logged-out state
     return false
   }
 
@@ -355,8 +399,22 @@ export class GitHubModeManager {
     return this.user
   }
 
-  public getRepositories(): GitHubRepo[] {
+  public getProjects(): Project[] {
     return this.repos
+  }
+
+  public async fetchProjects(): Promise<Project[]> {
+    if (!this.token) {
+      console.log('No token, trying to get stored token')
+      this.token = await this.getStoredToken()
+    }
+    
+    if (this.token) {
+      return this.fetchRepositories(this.token)
+    }
+    
+    console.error('Cannot fetch projects, user not authenticated.')
+    return []
   }
 
   public onStateChange(callback: (isActive: boolean) => void) {
@@ -383,7 +441,6 @@ export class GitHubModeManager {
     }
 
     try {
-      // Note: /issues endpoint returns both issues and PRs. We filter for just issues.
       const response = await fetch(`https://api.github.com/repos/${repoFullName}/issues?state=open`, {
         headers: {
           'Authorization': `token ${token}`,
@@ -395,9 +452,14 @@ export class GitHubModeManager {
         throw new Error(`Failed to fetch issues: ${response.status}`)
       }
 
-      const items = await response.json()
-      // An item is a PR if it has a `pull_request` key. We want to filter those out.
-      const issues: GitHubIssue[] = items.filter((item: any) => !item.pull_request)
+      const items: GitHubApiIssue[] = await response.json()
+      // Filter out pull requests and adapt the API response to our internal data model
+      const issues: GitHubIssue[] = items
+        .filter((item) => !item.pull_request)
+        .map((issue) => ({
+          ...issue,
+          url: issue.html_url // Map html_url to url
+        }))
       
       console.log('✅ Fetched', issues.length, 'open issues')
       return issues

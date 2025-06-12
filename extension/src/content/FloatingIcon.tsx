@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react'
 import { MessageCircle, Edit3, Github } from 'lucide-react'
 import { editModeManager } from './edit-mode'
 import { commentModeManager, type SelectedElement, CommentBubble } from './comment-mode'
-import { gitHubModeManager, type GitHubUser, type GitHubRepo, GitHubBubble } from './github-mode'
+import { gitHubModeManager, type GitHubUser, GitHubBubble } from './integrations/github'
+import type { Project } from './integrations/IntegrationManager'
 
 // Inline styles to ensure the component works even if Tailwind doesn't load
 const styles = {
@@ -30,7 +31,7 @@ const FloatingIcon: React.FC = () => {
   const [selectedElement, setSelectedElement] = useState<SelectedElement | null>(null)
   const [isGitHubAuthenticated, setIsGitHubAuthenticated] = useState(false)
   const [gitHubUser, setGitHubUser] = useState<GitHubUser | null>(null)
-  const [gitHubRepos, setGitHubRepos] = useState<GitHubRepo[]>([])
+  const [gitHubRepos, setGitHubRepos] = useState<Project[]>([])
   const selectedIconRef = useRef<string | null>(null)
 
   // Keep ref in sync with state
@@ -87,7 +88,7 @@ const FloatingIcon: React.FC = () => {
       setIsGitHubAuthenticated(isAuthenticated)
       setGitHubUser(user || null)
       if (isAuthenticated) {
-        setGitHubRepos(gitHubModeManager.getRepositories())
+        setGitHubRepos(gitHubModeManager.getProjects())
       } else {
         setGitHubRepos([])
       }
@@ -145,7 +146,7 @@ const FloatingIcon: React.FC = () => {
   const handleGitHubAuthenticate = async () => {
     const success = await gitHubModeManager.authenticate()
     if (success) {
-      setGitHubRepos(gitHubModeManager.getRepositories())
+      setGitHubRepos(gitHubModeManager.getProjects())
     }
   }
 
@@ -157,7 +158,11 @@ const FloatingIcon: React.FC = () => {
     gitHubModeManager.deactivate()
   }
 
-  const handleGitHubRepoSelect = async (repo: GitHubRepo) => {
+  const handleGitHubRepoSelect = async (repo: Project) => {
+    if (!repo.full_name) {
+      console.error('Repository full_name is required for GitHub operations')
+      return []
+    }
     console.log('🐙 Repository selected:', repo.full_name)
     return gitHubModeManager.fetchIssues(repo.full_name)
   }

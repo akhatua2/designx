@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Send, X, ChevronDown, Github } from 'lucide-react'
 import type { SelectedElement } from './CommentModeManager'
-import { gitHubModeManager, type GitHubRepo } from '../github-mode'
+import { gitHubModeManager } from '../integrations/github'
+import type { Project } from '../integrations/IntegrationManager'
 
 interface CommentBubbleProps {
   selectedElement: SelectedElement | null
@@ -16,8 +17,8 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
 }) => {
   const [comment, setComment] = useState('')
   const [isRepoDropdownOpen, setIsRepoDropdownOpen] = useState(false)
-  const [selectedRepo, setSelectedRepo] = useState<GitHubRepo | null>(null)
-  const [repos, setRepos] = useState<GitHubRepo[]>([])
+  const [selectedRepo, setSelectedRepo] = useState<Project | null>(null)
+  const [repos, setRepos] = useState<Project[]>([])
   const [isCreatingIssue, setIsCreatingIssue] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -25,7 +26,7 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
   // Load repositories when component mounts and when auth state changes
   useEffect(() => {
     // Initial load
-    const initialRepos = gitHubModeManager.getRepositories()
+    const initialRepos = gitHubModeManager.getProjects()
     console.log('[CommentBubble] Initial mount. Authenticated:', gitHubModeManager.isUserAuthenticated(), 'Repos:', initialRepos)
     setRepos(initialRepos)
 
@@ -33,7 +34,7 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
     const handleAuthStateChange = (isAuthenticated: boolean) => {
       console.log('[CommentBubble] Auth state changed. Authenticated:', isAuthenticated)
       if (isAuthenticated) {
-        const repos = gitHubModeManager.getRepositories()
+        const repos = gitHubModeManager.getProjects()
         console.log('[CommentBubble] Setting repos after auth:', repos)
         setRepos(repos)
       } else {
@@ -78,6 +79,10 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
 
   const handleSubmit = async () => {
     if (!comment.trim() || !selectedRepo) return
+    if (!selectedRepo.full_name) {
+      console.error('Repository full_name is required for creating GitHub issues')
+      return
+    }
 
     setIsCreatingIssue(true)
     try {
