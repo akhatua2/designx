@@ -1,32 +1,40 @@
 import os
 from dotenv import load_dotenv
+from pydantic_settings import BaseSettings
+from typing import List
 
 # Load environment variables from .env file
 load_dotenv()
 
-class Settings:
-    # GitHub OAuth configuration
-    GITHUB_CLIENT_ID: str = os.getenv("GITHUB_CLIENT_ID", "")
-    GITHUB_CLIENT_SECRET: str = os.getenv("GITHUB_CLIENT_SECRET", "")
-    
-    # API configuration
-    HOST: str = os.getenv("HOST", "0.0.0.0")
-    PORT: int = int(os.getenv("PORT", "8000"))
-    DEBUG: bool = os.getenv("DEBUG", "False").lower() == "true"
-    
-    # CORS origins - allow extension and localhost
-    ALLOWED_ORIGINS: list[str] = [
-        "chrome-extension://*",  # Chrome extensions
-        "moz-extension://*",     # Firefox extensions
-        "http://localhost:*",    # Local development
-        "https://localhost:*",   # Local development (HTTPS)
-        "*"                      # Temporarily allow all for debugging
+class Settings(BaseSettings):
+    # Server settings
+    HOST: str = "0.0.0.0"
+    PORT: int = 8000
+    DEBUG: bool = True
+
+    # CORS settings
+    ALLOWED_ORIGINS: List[str] = [
+        "chrome-extension://*",
+        "http://localhost:8000",
+        "http://localhost:3000"
     ]
-    
-    # CORS configuration
     CORS_ALLOW_CREDENTIALS: bool = True
-    CORS_ALLOW_METHODS: list[str] = ["*"]
-    CORS_ALLOW_HEADERS: list[str] = ["*"]
-    CORS_EXPOSE_HEADERS: list[str] = ["*"]
+    CORS_ALLOW_METHODS: List[str] = ["*"]
+    CORS_ALLOW_HEADERS: List[str] = ["*"]
+    CORS_EXPOSE_HEADERS: List[str] = []
+
+    # GitHub OAuth settings
+    GITHUB_CLIENT_ID: str = ""
+    GITHUB_CLIENT_SECRET: str = ""
+    GITHUB_REDIRECT_URI: str = "https://designx-705035175306.us-central1.run.app/api/github/callback"
+
+    # Slack OAuth settings
+    SLACK_CLIENT_ID: str = ""
+    SLACK_CLIENT_SECRET: str = ""
+    SLACK_REDIRECT_URI: str = "https://designx-705035175306.us-central1.run.app/api/slack/callback"
+
+    class Config:
+        env_file = ".env"
+        case_sensitive = True
 
 settings = Settings() 
