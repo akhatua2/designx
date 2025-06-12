@@ -792,12 +792,12 @@ async def run_sweagent(request: RunSWEAgentRequest):
         logger.info(f"🔧 Environment variables set: {env}")
         
         # Build the SWE-agent command
-        # First try without Modal deployment to see if that's the issue
+        # Switch to Docker deployment due to Modal hanging issue (#1204)
         cmd = [
             "sweagent", "run",
             "--agent.model.name=gpt-4o-mini",
             "--config", "config/default.yaml",
-            "--env.deployment.type=modal",  # Comment out Modal for now
+            # "--env.deployment.type=modal",  # Disabled due to Modal hanging issue
             "--agent.model.per_instance_cost_limit=1.00",
             f"--env.repo.github_url={request.repo_url}",
             f"--problem_statement.github_url={request.issue_url}"
