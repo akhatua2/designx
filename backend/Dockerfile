@@ -1,39 +1,24 @@
+# Use Python 3.11 slim image
+FROM python:3.11-slim
 
-# --- Builder Stage ---
-FROM python:3.9-slim as builder
-
-# Set the working directory
+# Set working directory
 WORKDIR /app
 
-# Install build dependencies
-RUN pip install --upgrade pip
-
-# Copy and install requirements
+# Copy requirements first to leverage Docker cache
 COPY requirements.txt .
-RUN pip wheel --no-cache-dir --wheel-dir /app/wheels -r requirements.txt
 
-#
-# --- Final Stage ---
-#
-FROM python:3.9-slim
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Set the working directory
-WORKDIR /app
-
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
-
-# Copy the wheels and install them
-COPY --from=builder /app/wheels /wheels
-RUN pip install --no-cache /wheels/*
-
-# Copy application code
+# Copy the rest of the application
 COPY . .
 
-# Expose the port the app runs on
+# Set environment variables
+ENV PORT=8000
+ENV HOST=0.0.0.0
+
+# Expose the port
 EXPOSE 8000
 
-# Define the command to run the application
-# Use 0.0.0.0 to make it accessible from outside the container
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"] 
+# Command to run the application
+CMD ["python", "main.py"] 

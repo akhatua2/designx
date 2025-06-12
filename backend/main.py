@@ -4,6 +4,7 @@ from fastapi.responses import HTMLResponse, Response
 import httpx
 from pydantic import BaseModel
 from config import settings
+import os
 
 app = FastAPI(
     title="DesignX Extension API",
@@ -512,10 +513,15 @@ async def slack_auth_success(code: str = None, error: str = None):
 
 if __name__ == "__main__":
     import uvicorn
+    
+    # Get port from environment variable for Cloud Run
+    port = int(os.getenv("PORT", "8000"))
+    
     uvicorn.run(
-        "main:app",  # Use import string format for reload to work
-        host=settings.HOST, 
-        port=settings.PORT,
+        "main:app",
+        host="0.0.0.0",  # Required for Cloud Run
+        port=port,
         log_level="info",
-        reload=settings.DEBUG  # Enable auto-reload during development
+        proxy_headers=True,  # Required for Cloud Run HTTPS
+        forwarded_allow_ips="*"  # Required for Cloud Run
     ) 
