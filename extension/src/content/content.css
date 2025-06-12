@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles for the floating icon to ensure it doesn't inherit page styles */
+#floating-extension-icon * {
+  box-sizing: border-box;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+}
+
+/* Reset specific properties but preserve SVG functionality */
+#floating-extension-icon button,
+#floating-extension-icon div {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 100%;
+  font: inherit;
+  vertical-align: baseline;
+  background: transparent;
+}
+
+/* Ensure SVG icons are visible */
+#floating-extension-icon svg {
+  display: inline-block;
+  fill: currentColor;
+  stroke: currentColor;
+  vertical-align: middle;
+}
+
+#floating-extension-icon {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #374151;
+} 

@@ -1,0 +1,14 @@
+# Extension specific
+extension/node_modules/
+extension/dist/
+.env
+
+# OS files
+.DS_Store
+
+# Editor files
+.vscode/
+.idea/
+
+# Logs
+*.log 
