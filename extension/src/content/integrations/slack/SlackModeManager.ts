@@ -76,7 +76,11 @@ export class SlackModeManager implements IntegrationManager {
     'chat:write',
     'groups:read',
     'reactions:read',
-    'users:read'
+    'users:read',
+    'channels:history',
+    'groups:history',
+    'mpim:history',
+    'im:history'
   ].join(',')
   private readonly BACKEND_URL = 'https://designx-705035175306.us-central1.run.app'
 
@@ -102,29 +106,38 @@ export class SlackModeManager implements IntegrationManager {
       )
 
       if (!authWindow) {
+        console.error('❌ Failed to open authentication window')
         throw new Error('Failed to open authentication window')
       }
 
       // Wait for authentication result
+      console.log('⏳ Waiting for auth message...')
       const authResult = await this.waitForAuthMessage()
       
       if (authResult.code) {
+        console.log('✅ Received auth code, exchanging for token...')
         // Exchange code for access token
         const token = await this.exchangeCodeForToken(authResult.code)
         
+        console.log('💾 Storing access token...')
         // Store token securely
         await this.storeAccessToken(token)
         
+        console.log('👤 Fetching user data...')
         // Fetch user info and channels
         await this.fetchUserData(token)
+        
+        console.log('📋 Fetching channels...')
         await this.fetchChannels(token)
         
         this.isAuthenticated = true
         this.notifyAuthStateChange()
         
+        console.log('🎉 Authentication completed successfully!')
         return true
       }
       
+      console.error('❌ Authentication failed - no code received')
       throw new Error('Authentication failed')
     } catch (error) {
       console.error('❌ Slack authentication error:', error)
@@ -197,40 +210,74 @@ export class SlackModeManager implements IntegrationManager {
   }
 
   private async fetchUserData(token: string): Promise<void> {
-    const response = await fetch('https://slack.com/api/users.identity', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
+    console.log('🔍 Starting fetchUserData with token type:', token.substring(0, 4) + '...')
+    
+    try {
+      console.log('📡 Making request to auth.test endpoint...')
+      const formData = new URLSearchParams()
+      formData.append('token', token)
+      
+      const response = await fetch('https://slack.com/api/auth.test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: formData
+      })
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch user data')
-    }
+      console.log('📥 Response status:', response.status)
+      
+      if (!response.ok) {
+        console.error('❌ Response not OK:', response.status, response.statusText)
+        throw new Error(`Failed to fetch user data: ${response.status} ${response.statusText}`)
+      }
 
-    const data = await response.json()
-    if (!data.ok) {
-      throw new Error(data.error || 'Failed to fetch user data')
-    }
+      const data = await response.json()
+      console.log('📄 Response data:', JSON.stringify(data, null, 2))
+      
+      if (!data.ok) {
+        console.error('❌ Slack API error:', data.error)
+        throw new Error(data.error || 'Failed to fetch user data')
+      }
 
-    this.user = {
-      login: data.user.name,
-      name: data.user.real_name || data.user.name,
-      avatar_url: data.user.profile.image_72,
-      html_url: '', // Slack doesn't have profile URLs
-      team_id: data.team.id,
-      team_name: data.team.name
+      console.log('✅ Successfully fetched user data')
+      this.user = {
+        login: data.user,
+        name: data.user,
+        avatar_url: '',
+        html_url: '',
+        team_id: data.team_id,
+        team_name: data.team
+      }
+    } catch (error) {
+      console.error('❌ Error in fetchUserData:', error)
+      throw error
     }
   }
 
   private async fetchChannels(token: string): Promise<SlackChannel[]> {
+    console.log('📡 Making request to conversations.list endpoint...')
+    const formData = new URLSearchParams()
+    formData.append('token', token)
+    
     const response = await fetch('https://slack.com/api/conversations.list', {
-      headers: { 'Authorization': `Bearer ${token}` }
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: formData
     })
 
     if (!response.ok) {
+      console.error('❌ Response not OK:', response.status, response.statusText)
       throw new Error('Failed to fetch channels')
     }
 
     const data = await response.json()
+    console.log('📄 Channels response:', JSON.stringify(data, null, 2))
+    
     if (!data.ok) {
+      console.error('❌ Slack API error:', data.error)
       throw new Error(data.error || 'Failed to fetch channels')
     }
 
@@ -312,14 +359,32 @@ export class SlackModeManager implements IntegrationManager {
     // For Slack, we'll fetch recent messages in the channel
     if (!this.token) return []
 
-    const response = await fetch(`https://slack.com/api/conversations.history?channel=${channelId}`, {
-      headers: { 'Authorization': `Bearer ${this.token}` }
+    console.log('📡 Making request to conversations.history for channel:', channelId)
+    const formData = new URLSearchParams()
+    formData.append('token', this.token)
+    formData.append('channel', channelId)
+    formData.append('limit', '10') // Limit to 10 messages
+
+    const response = await fetch('https://slack.com/api/conversations.history', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: formData
     })
 
-    if (!response.ok) return []
+    if (!response.ok) {
+      console.error('❌ Response not OK:', response.status, response.statusText)
+      return []
+    }
 
     const data = await response.json()
-    if (!data.ok) return []
+    console.log('📄 Messages response:', JSON.stringify(data, null, 2))
+    
+    if (!data.ok) {
+      console.error('❌ Slack API error:', data.error)
+      return []
+    }
 
     return data.messages.map((msg: any) => ({
       id: msg.ts,
@@ -336,24 +401,31 @@ export class SlackModeManager implements IntegrationManager {
     // For Slack, this posts a message to a channel
     if (!this.token) return null
 
+    const formData = new URLSearchParams()
+    formData.append('token', this.token)
+    formData.append('channel', channelId)
+    formData.append('text', title + (body ? `\n\n${body}` : ''))
+
     const response = await fetch('https://slack.com/api/chat.postMessage', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${this.token}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/x-www-form-urlencoded'
       },
-      body: JSON.stringify({
-        channel: channelId,
-        text: `${title}\n\n${body}`,
-        unfurl_links: false,
-        unfurl_media: false
-      })
+      body: formData
     })
 
-    if (!response.ok) return null
+    if (!response.ok) {
+      console.error('❌ Failed to send message:', response.status, response.statusText)
+      return null
+    }
 
     const data = await response.json()
-    if (!data.ok) return null
+    console.log('📄 Message response:', JSON.stringify(data, null, 2))
+    
+    if (!data.ok) {
+      console.error('❌ Slack API error:', data.error)
+      return null
+    }
 
     // Return the message timestamp as an identifier
     return data.ts

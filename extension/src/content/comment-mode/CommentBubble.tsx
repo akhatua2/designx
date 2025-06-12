@@ -1,13 +1,28 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Send, X, ChevronDown, Github } from 'lucide-react'
+import { Send, X, ChevronDown, Github, Slack } from 'lucide-react'
 import type { SelectedElement } from './CommentModeManager'
 import { gitHubModeManager } from '../integrations/github'
+import { slackModeManager } from '../integrations/slack'
 import type { Project } from '../integrations/IntegrationManager'
+import type { GitHubRepo } from '../integrations/github/GitHubModeManager'
+import type { SlackChannel } from '../integrations/slack/SlackModeManager'
 
 interface CommentBubbleProps {
   selectedElement: SelectedElement | null
   onClose: () => void
   onSubmit: (comment: string) => void
+}
+
+type Platform = 'github' | 'slack'
+
+// Type guard for GitHub repos
+function isGitHubRepo(project: Project): project is GitHubRepo {
+  return 'full_name' in project
+}
+
+// Type guard for Slack channels
+function isSlackChannel(project: Project): project is SlackChannel {
+  return 'is_channel' in project
 }
 
 const CommentBubble: React.FC<CommentBubbleProps> = ({ 
@@ -16,47 +31,56 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
   onSubmit 
 }) => {
   const [comment, setComment] = useState('')
-  const [isRepoDropdownOpen, setIsRepoDropdownOpen] = useState(false)
-  const [selectedRepo, setSelectedRepo] = useState<Project | null>(null)
-  const [repos, setRepos] = useState<Project[]>([])
-  const [isCreatingIssue, setIsCreatingIssue] = useState(false)
+  const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false)
+  const [selectedChannel, setSelectedChannel] = useState<Project | null>(null)
+  const [channels, setChannels] = useState<Project[]>([])
+  const [isCreatingMessage, setIsCreatingMessage] = useState(false)
+  const [selectedPlatform, setSelectedPlatform] = useState<Platform>('github')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // Load repositories when component mounts and when auth state changes
+  // Load channels when component mounts and when auth state changes
   useEffect(() => {
-    // Initial load
-    const initialRepos = gitHubModeManager.getProjects()
-    console.log('[CommentBubble] Initial mount. Authenticated:', gitHubModeManager.isUserAuthenticated(), 'Repos:', initialRepos)
-    setRepos(initialRepos)
-
-    // Set up auth state change listener
-    const handleAuthStateChange = (isAuthenticated: boolean) => {
-      console.log('[CommentBubble] Auth state changed. Authenticated:', isAuthenticated)
-      if (isAuthenticated) {
+    const loadChannels = () => {
+      const isGitHubAuth = gitHubModeManager.isUserAuthenticated()
+      const isSlackAuth = slackModeManager.isUserAuthenticated()
+      
+      if (selectedPlatform === 'github' && isGitHubAuth) {
         const repos = gitHubModeManager.getProjects()
-        console.log('[CommentBubble] Setting repos after auth:', repos)
-        setRepos(repos)
+        setChannels(repos)
+      } else if (selectedPlatform === 'slack' && isSlackAuth) {
+        const slackChannels = slackModeManager.getProjects()
+        setChannels(slackChannels)
       } else {
-        console.log('[CommentBubble] Clearing repos after logout')
-        setRepos([])
-        setSelectedRepo(null)
+        setChannels([])
       }
+      setSelectedChannel(null)
     }
 
-    gitHubModeManager.onAuthStateChange(handleAuthStateChange)
+    loadChannels()
 
-    // Cleanup listener on unmount
+    // Set up auth state change listeners
+    const handleGitHubAuthChange = () => {
+      if (selectedPlatform === 'github') loadChannels()
+    }
+    const handleSlackAuthChange = () => {
+      if (selectedPlatform === 'slack') loadChannels()
+    }
+
+    gitHubModeManager.onAuthStateChange(handleGitHubAuthChange)
+    slackModeManager.onAuthStateChange(handleSlackAuthChange)
+
     return () => {
       gitHubModeManager.onAuthStateChange(() => {})
+      slackModeManager.onAuthStateChange(() => {})
     }
-  }, [])
+  }, [selectedPlatform])
 
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsRepoDropdownOpen(false)
+        setIsChannelDropdownOpen(false)
       }
     }
 
@@ -73,32 +97,38 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
 
   // Clear comment when element changes
   useEffect(() => {
-    console.log('[CommentBubble] selectedElement changed:', selectedElement)
     setComment('')
   }, [selectedElement])
 
   const handleSubmit = async () => {
-    if (!comment.trim() || !selectedRepo) return
-    if (!selectedRepo.full_name) {
-      console.error('Repository full_name is required for creating GitHub issues')
-      return
-    }
+    if (!comment.trim() || !selectedChannel) return
 
-    setIsCreatingIssue(true)
+    setIsCreatingMessage(true)
     try {
-      const title = `Feedback: ${getMinimalElementInfo(selectedElement!.elementInfo)}`
-      const body = `${comment.trim()}\n\n---\n**Element Info:**\n\`${selectedElement!.elementInfo}\`\n\n**DOM Path:**\n\`${selectedElement!.domPath}\``
-      console.log('[CommentBubble] Creating issue in repo:', selectedRepo.full_name, 'Title:', title)
-      const issueUrl = await gitHubModeManager.createIssue(selectedRepo.full_name, title, body)
-      console.log('[CommentBubble] Issue created. URL:', issueUrl)
-      if (issueUrl) {
-        onSubmit(comment.trim())
-        setComment('')
-        onClose()
-        window.open(issueUrl, '_blank')
+      if (selectedPlatform === 'github' && isGitHubRepo(selectedChannel)) {
+        const title = `Feedback: ${getMinimalElementInfo(selectedElement!.elementInfo)}`
+        const body = `${comment.trim()}\n\n---\n**Element Info:**\n\`${selectedElement!.elementInfo}\`\n\n**DOM Path:**\n\`${selectedElement!.domPath}\``
+        const issueUrl = await gitHubModeManager.createIssue(selectedChannel.full_name, title, body)
+        if (issueUrl) {
+          onSubmit(comment.trim())
+          setComment('')
+          onClose()
+          window.open(issueUrl, '_blank')
+        }
+      } else if (selectedPlatform === 'slack' && isSlackChannel(selectedChannel)) {
+        const messageText = `${comment.trim()}\n\n` +
+          `*Element Info:* \`${selectedElement!.elementInfo}\`\n` +
+          `*DOM Path:* \`${selectedElement!.domPath}\``
+        
+        const messageTs = await slackModeManager.createIssue(selectedChannel.id, messageText, '')
+        if (messageTs) {
+          onSubmit(comment.trim())
+          setComment('')
+          onClose()
+        }
       }
     } finally {
-      setIsCreatingIssue(false)
+      setIsCreatingMessage(false)
     }
   }
 
@@ -112,12 +142,27 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
     }
   }
 
+  const handlePlatformChange = (platform: Platform) => {
+    setSelectedPlatform(platform)
+    setSelectedChannel(null)
+    setIsChannelDropdownOpen(false)
+  }
+
   if (!selectedElement) return null
 
   // Extract just the tag name for minimal display
   const getMinimalElementInfo = (elementInfo: string): string => {
     const match = elementInfo.match(/^<([^>\s]+)/)
     return match ? `<${match[1]}>` : elementInfo.split(' ')[0] || elementInfo
+  }
+
+  const getChannelDisplayName = (channel: Project): string => {
+    if (isGitHubRepo(channel)) {
+      return channel.full_name
+    } else if (isSlackChannel(channel)) {
+      return `#${channel.name}`
+    }
+    return channel.name || ''
   }
 
   const bubbleStyles = {
@@ -177,12 +222,33 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
     gap: '8px'
   }
 
-  const repoSelectorStyles = {
+  const platformSelectorStyles = {
+    display: 'flex',
+    gap: '4px',
+    marginBottom: '6px'
+  }
+
+  const platformButtonStyles = (active: boolean) => ({
+    padding: '4px 8px',
+    borderRadius: '12px',
+    border: 'none',
+    fontSize: '10px',
+    fontWeight: '500',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    backgroundColor: active ? '#3b82f6' : 'rgba(255, 255, 255, 0.1)',
+    color: active ? 'white' : 'rgba(255, 255, 255, 0.6)',
+    transition: 'all 0.2s ease'
+  })
+
+  const channelSelectorStyles = {
     position: 'relative' as const,
     flex: 1
   }
 
-  const repoButtonStyles = {
+  const channelButtonStyles = {
     width: '100%',
     padding: '4px 8px',
     borderRadius: '12px',
@@ -194,7 +260,7 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
     alignItems: 'center',
     gap: '4px',
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    color: selectedRepo ? 'white' : 'rgba(255, 255, 255, 0.5)',
+    color: selectedChannel ? 'white' : 'rgba(255, 255, 255, 0.5)',
     transition: 'all 0.2s ease'
   }
 
@@ -212,7 +278,7 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
     boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)'
   }
 
-  const repoItemStyles = {
+  const channelItemStyles = {
     padding: '6px 8px',
     fontSize: '10px',
     cursor: 'pointer',
@@ -226,14 +292,14 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
     border: 'none',
     fontSize: '10px',
     fontWeight: '500',
-    cursor: comment.trim() && selectedRepo ? 'pointer' : 'not-allowed',
+    cursor: comment.trim() && selectedChannel ? 'pointer' : 'not-allowed',
     display: 'flex',
     alignItems: 'center',
     gap: '4px',
     transition: 'all 0.2s ease',
-    backgroundColor: comment.trim() && selectedRepo ? '#3b82f6' : 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: comment.trim() && selectedChannel ? '#3b82f6' : 'rgba(255, 255, 255, 0.1)',
     color: 'white',
-    opacity: comment.trim() && selectedRepo ? 1 : 0.5
+    opacity: comment.trim() && selectedChannel ? 1 : 0.5
   }
 
   const closeButtonStyles = {
@@ -244,6 +310,16 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
     padding: '2px',
     borderRadius: '4px',
     transition: 'color 0.2s ease'
+  }
+
+  const getAuthPrompt = () => {
+    if (selectedPlatform === 'github' && !gitHubModeManager.isUserAuthenticated()) {
+      return 'Sign in to GitHub to create issues'
+    }
+    if (selectedPlatform === 'slack' && !slackModeManager.isUserAuthenticated()) {
+      return 'Sign in to Slack to send messages'
+    }
+    return selectedPlatform === 'github' ? 'Select repository' : 'Select channel'
   }
 
   return (
@@ -265,7 +341,7 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
             color: rgba(255, 255, 255, 0.4);
           }
 
-          .repo-item:hover {
+          .channel-item:hover {
             background-color: rgba(255, 255, 255, 0.1);
           }
         `}
@@ -284,6 +360,23 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
             <X size={12} />
           </button>
         </div>
+
+        <div style={platformSelectorStyles}>
+          <button
+            onClick={() => handlePlatformChange('github')}
+            style={platformButtonStyles(selectedPlatform === 'github')}
+          >
+            <Github size={12} />
+            GitHub
+          </button>
+          <button
+            onClick={() => handlePlatformChange('slack')}
+            style={platformButtonStyles(selectedPlatform === 'slack')}
+          >
+            <Slack size={12} />
+            Slack
+          </button>
+        </div>
         
         <textarea
           ref={textareaRef}
@@ -296,34 +389,36 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
         />
         
         <div style={buttonContainerStyles}>
-          <div style={repoSelectorStyles} ref={dropdownRef}>
+          <div style={channelSelectorStyles} ref={dropdownRef}>
             <button
-              onClick={() => setIsRepoDropdownOpen(!isRepoDropdownOpen)}
-              style={repoButtonStyles}
+              onClick={() => setIsChannelDropdownOpen(!isChannelDropdownOpen)}
+              style={channelButtonStyles}
             >
-              <Github size={12} />
-              {selectedRepo ? selectedRepo.name : 'Select repository'}
+              {selectedPlatform === 'github' ? <Github size={12} /> : <Slack size={12} />}
+              {selectedChannel ? getChannelDisplayName(selectedChannel) : getAuthPrompt()}
               <ChevronDown size={12} />
             </button>
 
-            {isRepoDropdownOpen && (
+            {isChannelDropdownOpen && (
               <div style={dropdownStyles}>
-                {repos.length === 0 ? (
-                  <div style={{ ...repoItemStyles, cursor: 'default' }}>
-                    No repositories available
+                {channels.length === 0 ? (
+                  <div style={{ ...channelItemStyles, cursor: 'default' }}>
+                    {selectedPlatform === 'github' 
+                      ? 'No repositories available' 
+                      : 'No channels available'}
                   </div>
                 ) : (
-                  repos.map((repo) => (
+                  channels.map((channel) => (
                     <div
-                      key={repo.id}
-                      className="repo-item"
-                      style={repoItemStyles}
+                      key={String(channel.id)}
+                      className="channel-item"
+                      style={channelItemStyles}
                       onClick={() => {
-                        setSelectedRepo(repo)
-                        setIsRepoDropdownOpen(false)
+                        setSelectedChannel(channel)
+                        setIsChannelDropdownOpen(false)
                       }}
                     >
-                      {repo.full_name}
+                      {getChannelDisplayName(channel)}
                     </div>
                   ))
                 )}
@@ -333,11 +428,15 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
 
           <button
             onClick={handleSubmit}
-            disabled={!comment.trim() || !selectedRepo || isCreatingIssue}
+            disabled={!comment.trim() || !selectedChannel || isCreatingMessage}
             style={submitButtonStyles}
           >
             <Send size={12} />
-            {isCreatingIssue ? 'Creating...' : 'Create Issue'}
+            {isCreatingMessage 
+              ? 'Sending...' 
+              : selectedPlatform === 'github' 
+                ? 'Create Issue' 
+                : 'Send Message'}
           </button>
         </div>
       </div>

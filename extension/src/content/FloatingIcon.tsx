@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { MessageCircle, Edit3, Github, MessageSquare } from 'lucide-react'
+import { MessageCircle, Edit3, Github, MessageSquare, Slack } from 'lucide-react'
 import { editModeManager } from './edit-mode'
 import { commentModeManager, type SelectedElement, CommentBubble } from './comment-mode'
 import { gitHubModeManager, type GitHubUser, GitHubBubble } from './integrations/github'
@@ -307,7 +307,7 @@ const FloatingIcon: React.FC = () => {
             padding: '4px'
           }}
         >
-          <MessageSquare 
+          <Slack 
             style={{ 
               width: '18px', 
               height: '18px', 
