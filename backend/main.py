@@ -820,9 +820,9 @@ async def run_sweagent(request: RunSWEAgentRequest):
             cmd,
             env=env,
             stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,  # Combine stderr with stdout
+            stderr=subprocess.PIPE,  # Separate stderr
             text=True,
-            bufsize=1,  # Line buffered
+            bufsize=0,  # Unbuffered
             universal_newlines=True,
             cwd="/app/SWE-agent"  # Run from SWE-agent directory
         )
@@ -832,20 +832,66 @@ async def run_sweagent(request: RunSWEAgentRequest):
         # Start a background task to monitor the process
         import asyncio
         import threading
+        import time
         
         def monitor_process():
             try:
-                # Read output in real-time
-                for line in iter(process.stdout.readline, ''):
-                    if line:
-                        print(f"📄 SWE-agent: {line.strip()}")
+                print("🔍 Starting process monitor...")
                 
-                # Wait for process to complete
-                return_code = process.wait()
-                print(f"🏁 SWE-agent process completed with return code: {return_code}")
+                # Monitor for a few seconds to capture initial output
+                start_time = time.time()
+                stdout_lines = []
+                stderr_lines = []
+                
+                # Read initial output for 30 seconds
+                while time.time() - start_time < 30:
+                    # Check if process is still running
+                    if process.poll() is not None:
+                        print(f"🏁 Process terminated early with return code: {process.returncode}")
+                        break
+                    
+                    # Read stdout
+                    try:
+                        line = process.stdout.readline()
+                        if line:
+                            line = line.strip()
+                            stdout_lines.append(line)
+                            print(f"📄 SWE-agent STDOUT: {line}")
+                    except:
+                        pass
+                    
+                    # Read stderr
+                    try:
+                        line = process.stderr.readline()
+                        if line:
+                            line = line.strip()
+                            stderr_lines.append(line)
+                            print(f"⚠️ SWE-agent STDERR: {line}")
+                    except:
+                        pass
+                    
+                    time.sleep(0.1)
+                
+                # After 30 seconds, check final status
+                if process.poll() is None:
+                    print("⏰ Process still running after 30 seconds - continuing in background")
+                else:
+                    print(f"🏁 Final process status: {process.returncode}")
+                    
+                    # Get any remaining output
+                    try:
+                        remaining_stdout, remaining_stderr = process.communicate(timeout=5)
+                        if remaining_stdout:
+                            print(f"📄 Final STDOUT: {remaining_stdout}")
+                        if remaining_stderr:
+                            print(f"⚠️ Final STDERR: {remaining_stderr}")
+                    except:
+                        pass
                 
             except Exception as e:
                 print(f"❌ Error monitoring SWE-agent process: {str(e)}")
+                import traceback
+                traceback.print_exc()
         
         # Start monitoring in a separate thread
         monitor_thread = threading.Thread(target=monitor_process, daemon=True)
