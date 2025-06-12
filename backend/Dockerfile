@@ -21,10 +21,6 @@ RUN git clone https://github.com/SWE-agent/SWE-agent.git /app/SWE-agent \
     && cd /app/SWE-agent \
     && python -m pip install --upgrade pip \
     && pip install --editable . \
-    && apt-get purge -y build-essential \
-    && apt-get autoremove -y \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
 
 # Copy the rest of the application
 COPY . .
