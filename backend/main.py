@@ -28,6 +28,15 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
+# Add Slack token request/response models
+class SlackTokenRequest(BaseModel):
+    code: str
+
+class SlackTokenResponse(BaseModel):
+    access_token: str
+    team: dict
+    authed_user: dict
+
 @app.get("/favicon.ico")
 async def favicon():
     """
@@ -286,6 +295,220 @@ async def get_github_user(authorization: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@app.post("/api/slack/exchange", response_model=SlackTokenResponse)
+async def exchange_slack_token(request: SlackTokenRequest):
+    """
+    Exchange Slack OAuth authorization code for access token
+    """
+    print(f"🔄 Received Slack token exchange request")
+    print(f"🔧 Authorization code length: {len(request.code)}")
+    
+    try:
+        slack_client_id = settings.SLACK_CLIENT_ID
+        slack_client_secret = settings.SLACK_CLIENT_SECRET
+        slack_redirect_uri = settings.SLACK_REDIRECT_URI
+        
+        print(f"🔧 Slack Client ID: {slack_client_id}")
+        print(f"🔧 Slack Client Secret configured: {'Yes' if slack_client_secret else 'No'}")
+        print(f"🔧 Slack Redirect URI: {slack_redirect_uri}")
+        
+        if not slack_client_id or not slack_client_secret:
+            print("❌ Slack credentials not configured")
+            raise HTTPException(
+                status_code=500, 
+                detail="Slack credentials not configured"
+            )
+        
+        print("📡 Making request to Slack token endpoint...")
+        # Exchange code for access token with Slack
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://slack.com/api/oauth.v2.access",
+                data={
+                    "client_id": slack_client_id,
+                    "client_secret": slack_client_secret,
+                    "code": request.code,
+                    "redirect_uri": slack_redirect_uri
+                }
+            )
+            
+        print(f"📡 Slack response status: {response.status_code}")
+        print(f"📡 Slack response body: {response.text}")
+        
+        if response.status_code != 200:
+            error_msg = f"Slack API error: {response.status_code}"
+            try:
+                error_data = response.json()
+                if "error" in error_data:
+                    error_msg = error_data["error"]
+            except:
+                pass
+            
+            print(f"❌ Slack API error: {error_msg}")
+            raise HTTPException(status_code=400, detail=error_msg)
+            
+        token_data = response.json()
+        print(f"📄 Slack response data keys: {list(token_data.keys())}")
+        
+        # Check for Slack API errors
+        if not token_data.get("ok"):
+            error_msg = token_data.get("error", "Unknown error")
+            print(f"❌ Slack OAuth error: {error_msg}")
+            raise HTTPException(status_code=400, detail=f"Slack OAuth error: {error_msg}")
+        
+        if "access_token" not in token_data:
+            print("❌ No access token in Slack response")
+            raise HTTPException(status_code=400, detail="No access token received from Slack")
+            
+        print("✅ Slack token exchange successful")
+        return SlackTokenResponse(
+            access_token=token_data["access_token"],
+            team=token_data.get("team", {}),
+            authed_user=token_data.get("authed_user", {})
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Unexpected error in Slack token exchange: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@app.get("/api/slack/callback", response_class=HTMLResponse)
+async def slack_oauth_callback(code: str = None, error: str = None):
+    """
+    Slack OAuth callback endpoint - redirects to success page with parameters
+    """
+    print(f"🔄 Slack OAuth callback received")
+    print(f"🔧 Code present: {'Yes' if code else 'No'}")
+    print(f"🔧 Error present: {'Yes' if error else 'No'}")
+    
+    if error:
+        print(f"❌ Slack OAuth callback error: {error}")
+        return f"""
+        <html>
+            <head><title>Slack Auth Error</title></head>
+            <body>
+                <script>
+                    console.log('❌ OAuth error: {error}');
+                    window.location.href = '/auth/slack/success?error=' + encodeURIComponent('{error}');
+                </script>
+            </body>
+        </html>
+        """
+    
+    if code:
+        print(f"✅ Slack OAuth callback successful, redirecting with code")
+        return f"""
+        <html>
+            <head><title>Slack Auth Success</title></head>
+            <body>
+                <script>
+                    console.log('✅ OAuth code received, redirecting...');
+                    window.location.href = '/auth/slack/success?code=' + encodeURIComponent('{code}');
+                </script>
+            </body>
+        </html>
+        """
+    
+    print("❌ Slack OAuth callback missing code and error")
+    raise HTTPException(status_code=400, detail="Missing authorization code or error")
+
+@app.get("/auth/slack/success", response_class=HTMLResponse)
+async def slack_auth_success(code: str = None, error: str = None):
+    """
+    Success page that the extension can detect
+    """
+    print(f"🎯 Slack auth success page accessed")
+    print(f"🔧 Code present: {'Yes' if code else 'No'}")
+    print(f"🔧 Error present: {'Yes' if error else 'No'}")
+    
+    if error:
+        print(f"❌ Auth success page with error: {error}")
+        return f"""
+        <html>
+            <head>
+                <title>Slack Authentication Error</title>
+                <style>
+                    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; 
+                           padding: 40px; text-align: center; background: #f5f5f5; }}
+                    .error {{ color: #d73a49; background: white; padding: 20px; border-radius: 8px; 
+                             box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
+                </style>
+            </head>
+            <body>
+                <div class="error">
+                    <h2>Authentication Failed</h2>
+                    <p>Error: {error}</p>
+                    <p>You can close this window and try again.</p>
+                </div>
+                <script>
+                    console.log('❌ Auth failed with error: {error}');
+                    
+                    // Send error message to parent window
+                    if (window.opener) {{
+                        window.opener.postMessage({{
+                            type: 'SLACK_AUTH_ERROR',
+                            error: '{error}'
+                        }}, '*');
+                        console.log('📨 Error message sent to parent window');
+                    }} else {{
+                        console.log('⚠️ No parent window found to send message to');
+                    }}
+                    
+                    // Close window after sending message
+                    setTimeout(() => {{ 
+                        window.close(); 
+                    }}, 2000);
+                </script>
+            </body>
+        </html>
+        """
+    
+    if code:
+        print(f"✅ Auth success page with code, sending message to parent window")
+        return f"""
+        <html>
+            <head>
+                <title>Slack Authentication Success</title>
+                <style>
+                    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; 
+                           padding: 40px; text-align: center; background: #f5f5f5; }}
+                    .success {{ color: #28a745; background: white; padding: 20px; border-radius: 8px; 
+                               box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
+                </style>
+            </head>
+            <body>
+                <div class="success">
+                    <h2>✅ Authentication Successful!</h2>
+                    <p>Slack authentication completed successfully.</p>
+                    <p>This window will close automatically...</p>
+                </div>
+                <script>
+                    console.log('✅ Auth successful, sending message to parent window...');
+                    
+                    // Send success message to parent window
+                    if (window.opener) {{
+                        window.opener.postMessage({{
+                            type: 'SLACK_AUTH_SUCCESS',
+                            code: '{code}'
+                        }}, '*');
+                        console.log('📨 Success message sent to parent window');
+                    }} else {{
+                        console.log('⚠️ No parent window found to send message to');
+                    }}
+                    
+                    // Close window after sending message
+                    setTimeout(() => {{ 
+                        window.close(); 
+                    }}, 1000);
+                </script>
+            </body>
+        </html>
+        """
+    
+    print("❌ Auth success page accessed without code or error")
+    raise HTTPException(status_code=400, detail="Missing authorization code")
 
 if __name__ == "__main__":
     import uvicorn

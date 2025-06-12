@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react'
 import { X, Star, Lock, Globe, GitPullRequest, ArrowLeft, CircleDot } from 'lucide-react'
-import type { GitHubRepo, GitHubUser, GitHubIssue } from './GitHubModeManager'
+import type { GitHubUser, GitHubIssue, GitHubRepo } from './GitHubModeManager'
+import type { Project } from '../IntegrationManager'
 
 interface GitHubBubbleProps {
   isVisible: boolean
   isAuthenticated: boolean
   user: GitHubUser | null
-  repos: GitHubRepo[]
+  repos: Project[]
   onClose: () => void
   onAuthenticate: () => void
   onLogout: () => void
-  onSelectRepo: (repo: GitHubRepo) => Promise<GitHubIssue[]>
+  onSelectRepo: (repo: Project) => Promise<GitHubIssue[]>
 }
 
 const GitHubBubble: React.FC<GitHubBubbleProps> = ({ 
@@ -23,11 +24,17 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
   onLogout,
   onSelectRepo
 }) => {
-  const [selectedRepo, setSelectedRepo] = useState<GitHubRepo | null>(null)
+  const [selectedRepo, setSelectedRepo] = useState<Project | null>(null)
   const [issues, setIssues] = useState<GitHubIssue[]>([])
   const [loading, setLoading] = useState(false)
+  const [isRepoDropdownOpen, setIsRepoDropdownOpen] = useState(false)
 
-  const handleRepoClick = async (repo: GitHubRepo) => {
+  // Type guard to check if a Project is a GitHubRepo
+  const isGitHubRepo = (repo: Project): repo is GitHubRepo => {
+    return 'private' in repo && 'language' in repo && 'stargazers_count' in repo
+  }
+
+  const handleRepoClick = async (repo: Project) => {
     setLoading(true)
     setSelectedRepo(repo)
     const fetchedIssues = await onSelectRepo(repo)
@@ -353,7 +360,7 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
                     key={issue.number}
                     className="github-issue-item"
                     style={prItemStyles}
-                    onClick={() => window.open(issue.html_url, '_blank')}
+                    onClick={() => window.open(issue.url, '_blank')}
                   >
                     <div style={prTitleStyles}>
                       #{issue.number} {issue.title}
@@ -386,55 +393,55 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
               </div>
               
               {repos.length === 0 ? (
-                <div style={{ 
-                  textAlign: 'center', 
-                  padding: '20px', 
-                  color: 'rgba(255, 255, 255, 0.5)', 
-                  fontSize: '10px' 
-                }}>
-                  No repositories found
+                <div style={{ ...repoItemStyles, cursor: 'default' }}>
+                  No repositories available
                 </div>
               ) : (
-                repos.map((repo) => (
-                  <div
-                    key={repo.id}
-                    className="github-repo-item"
-                    style={repoItemStyles}
-                    onClick={() => handleRepoClick(repo)}
-                  >
-                    <div style={repoNameStyles}>
-                      {repo.private ? <Lock size={10} /> : <Globe size={10} />}
-                      {repo.name}
-                    </div>
-                    {repo.description && (
-                      <div style={repoDescStyles}>
-                        {repo.description.length > 80 
-                          ? `${repo.description.substring(0, 80)}...` 
-                          : repo.description
-                        }
+                repos.map((repo) => {
+                  const gitHubRepo = isGitHubRepo(repo) ? repo : null
+                  return (
+                    <div
+                      key={repo.id}
+                      className="github-repo-item"
+                      style={repoItemStyles}
+                      onClick={() => handleRepoClick(repo)}
+                    >
+                      <div style={repoNameStyles}>
+                        {gitHubRepo?.private ? <Lock size={10} /> : <Globe size={10} />}
+                        {repo.full_name || repo.name}
                       </div>
-                    )}
-                    <div style={repoMetaStyles}>
-                      {repo.language && (
-                        <div style={languageStyles}>
-                          <div 
-                            style={{
-                              width: '6px',
-                              height: '6px',
-                              borderRadius: '50%',
-                              backgroundColor: '#3178c6'
-                            }}
-                          />
-                          {repo.language}
+                      {repo.description && (
+                        <div style={repoDescStyles}>
+                          {repo.description.length > 80 
+                            ? `${repo.description.substring(0, 80)}...` 
+                            : repo.description
+                          }
                         </div>
                       )}
-                      <div style={starsStyles}>
-                        <Star size={8} />
-                        {repo.stargazers_count}
+                      <div style={repoMetaStyles}>
+                        {gitHubRepo?.language && (
+                          <div style={languageStyles}>
+                            <div 
+                              style={{
+                                width: '6px',
+                                height: '6px',
+                                borderRadius: '50%',
+                                backgroundColor: '#3178c6'
+                              }}
+                            />
+                            {gitHubRepo.language}
+                          </div>
+                        )}
+                        {gitHubRepo && (
+                          <div style={starsStyles}>
+                            <Star size={8} />
+                            {gitHubRepo.stargazers_count}
+                          </div>
+                        )}
                       </div>
                     </div>
-                  </div>
-                ))
+                  )
+                })
               )}
             </>
           )}
