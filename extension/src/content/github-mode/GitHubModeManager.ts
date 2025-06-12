@@ -16,7 +16,7 @@ export interface GitHubUser {
   html_url: string
 }
 
-export interface GitHubPR {
+export interface GitHubIssue {
   number: number
   title: string
   html_url: string
@@ -373,17 +373,18 @@ export class GitHubModeManager {
     this.onAuthStateChangeCallbacks = []
   }
 
-  public async fetchPullRequests(repoFullName: string): Promise<GitHubPR[]> {
-    console.log('🔄 Fetching pull requests for', repoFullName)
+  public async fetchIssues(repoFullName: string): Promise<GitHubIssue[]> {
+    console.log('🔄 Fetching issues for', repoFullName)
     const token = await this.getStoredToken()
     
     if (!token) {
-      console.error('❌ No token available to fetch PRs')
+      console.error('❌ No token available to fetch issues')
       return []
     }
 
     try {
-      const response = await fetch(`https://api.github.com/repos/${repoFullName}/pulls?state=open`, {
+      // Note: /issues endpoint returns both issues and PRs. We filter for just issues.
+      const response = await fetch(`https://api.github.com/repos/${repoFullName}/issues?state=open`, {
         headers: {
           'Authorization': `token ${token}`,
           'Accept': 'application/vnd.github.v3+json'
@@ -391,14 +392,17 @@ export class GitHubModeManager {
       })
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch PRs: ${response.status}`)
+        throw new Error(`Failed to fetch issues: ${response.status}`)
       }
 
-      const prs: GitHubPR[] = await response.json()
-      console.log('✅ Fetched', prs.length, 'pull requests')
-      return prs
+      const items = await response.json()
+      // An item is a PR if it has a `pull_request` key. We want to filter those out.
+      const issues: GitHubIssue[] = items.filter((item: any) => !item.pull_request)
+      
+      console.log('✅ Fetched', issues.length, 'open issues')
+      return issues
     } catch (error) {
-      console.error('❌ Error fetching pull requests:', error)
+      console.error('❌ Error fetching issues:', error)
       return []
     }
   }

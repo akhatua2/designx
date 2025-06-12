@@ -159,7 +159,7 @@ const FloatingIcon: React.FC = () => {
 
   const handleGitHubRepoSelect = async (repo: GitHubRepo) => {
     console.log('🐙 Repository selected:', repo.full_name)
-    return gitHubModeManager.fetchPullRequests(repo.full_name)
+    return gitHubModeManager.fetchIssues(repo.full_name)
   }
 
   return (

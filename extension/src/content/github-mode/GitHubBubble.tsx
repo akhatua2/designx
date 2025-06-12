@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { X, Star, Lock, Globe, GitPullRequest, ArrowLeft } from 'lucide-react'
-import type { GitHubRepo, GitHubUser, GitHubPR } from './GitHubModeManager'
+import { X, Star, Lock, Globe, GitPullRequest, ArrowLeft, CircleDot } from 'lucide-react'
+import type { GitHubRepo, GitHubUser, GitHubIssue } from './GitHubModeManager'
 
 interface GitHubBubbleProps {
   isVisible: boolean
@@ -10,7 +10,7 @@ interface GitHubBubbleProps {
   onClose: () => void
   onAuthenticate: () => void
   onLogout: () => void
-  onSelectRepo: (repo: GitHubRepo) => Promise<GitHubPR[]>
+  onSelectRepo: (repo: GitHubRepo) => Promise<GitHubIssue[]>
 }
 
 const GitHubBubble: React.FC<GitHubBubbleProps> = ({ 
@@ -24,20 +24,20 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
   onSelectRepo
 }) => {
   const [selectedRepo, setSelectedRepo] = useState<GitHubRepo | null>(null)
-  const [pullRequests, setPullRequests] = useState<GitHubPR[]>([])
+  const [issues, setIssues] = useState<GitHubIssue[]>([])
   const [loading, setLoading] = useState(false)
 
   const handleRepoClick = async (repo: GitHubRepo) => {
     setLoading(true)
     setSelectedRepo(repo)
-    const prs = await onSelectRepo(repo)
-    setPullRequests(prs)
+    const fetchedIssues = await onSelectRepo(repo)
+    setIssues(fetchedIssues)
     setLoading(false)
   }
 
   const handleBackClick = () => {
     setSelectedRepo(null)
-    setPullRequests([])
+    setIssues([])
   }
 
   if (!isVisible) return null
@@ -240,7 +240,7 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
             border-color: rgba(255, 255, 255, 0.2) !important;
           }
 
-          .github-pr-item:hover {
+          .github-issue-item:hover {
             background-color: rgba(255, 255, 255, 0.1) !important;
             border-color: rgba(255, 255, 255, 0.2) !important;
           }
@@ -325,8 +325,8 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
                 alignItems: 'center',
                 gap: '4px'
               }}>
-                <GitPullRequest size={12} />
-                Pull Requests for {selectedRepo.name}
+                <CircleDot size={12} />
+                Open Issues for {selectedRepo.name}
               </div>
 
               {loading ? (
@@ -336,43 +336,43 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
                   color: 'rgba(255, 255, 255, 0.5)', 
                   fontSize: '10px' 
                 }}>
-                  Loading pull requests...
+                  Loading issues...
                 </div>
-              ) : pullRequests.length === 0 ? (
+              ) : issues.length === 0 ? (
                 <div style={{ 
                   textAlign: 'center', 
                   padding: '20px', 
                   color: 'rgba(255, 255, 255, 0.5)', 
                   fontSize: '10px' 
                 }}>
-                  No open pull requests
+                  No open issues
                 </div>
               ) : (
-                pullRequests.map((pr) => (
+                issues.map((issue) => (
                   <div
-                    key={pr.number}
-                    className="github-pr-item"
+                    key={issue.number}
+                    className="github-issue-item"
                     style={prItemStyles}
-                    onClick={() => window.open(pr.html_url, '_blank')}
+                    onClick={() => window.open(issue.html_url, '_blank')}
                   >
                     <div style={prTitleStyles}>
-                      #{pr.number} {pr.title}
+                      #{issue.number} {issue.title}
                     </div>
                     <div style={prMetaStyles}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <img 
-                          src={pr.user.avatar_url} 
-                          alt={pr.user.login}
+                          src={issue.user.avatar_url} 
+                          alt={issue.user.login}
                           style={{
                             width: '12px',
                             height: '12px',
                             borderRadius: '50%'
                           }}
                         />
-                        {pr.user.login}
+                        {issue.user.login}
                       </div>
                       <div>
-                        {new Date(pr.created_at).toLocaleDateString()}
+                        {new Date(issue.created_at).toLocaleDateString()}
                       </div>
                     </div>
                   </div>
