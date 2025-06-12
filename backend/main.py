@@ -783,11 +783,12 @@ async def run_sweagent(request: RunSWEAgentRequest):
         })
         
         # Build the SWE-agent command
+        # First try without Modal deployment to see if that's the issue
         cmd = [
             "sweagent", "run",
             "--agent.model.name=gpt-4o-mini",
             "--config", "config/default.yaml",
-            "--env.deployment.type=modal",
+            # "--env.deployment.type=modal",  # Comment out Modal for now
             "--agent.model.per_instance_cost_limit=1.00",
             f"--env.repo.github_url={request.repo_url}",
             f"--problem_statement.github_url={request.issue_url}"
@@ -842,21 +843,25 @@ async def run_sweagent(request: RunSWEAgentRequest):
                 start_time = time.time()
                 stdout_lines = []
                 stderr_lines = []
+                last_output_time = start_time
                 
-                # Read initial output for 30 seconds
-                while time.time() - start_time < 30:
+                # Read initial output for 60 seconds (increased timeout)
+                while time.time() - start_time < 60:
                     # Check if process is still running
                     if process.poll() is not None:
                         print(f"🏁 Process terminated early with return code: {process.returncode}")
                         break
                     
                     # Read stdout
+                    output_found = False
                     try:
                         line = process.stdout.readline()
                         if line:
                             line = line.strip()
                             stdout_lines.append(line)
                             print(f"📄 SWE-agent STDOUT: {line}")
+                            last_output_time = time.time()
+                            output_found = True
                     except:
                         pass
                     
@@ -867,14 +872,31 @@ async def run_sweagent(request: RunSWEAgentRequest):
                             line = line.strip()
                             stderr_lines.append(line)
                             print(f"⚠️ SWE-agent STDERR: {line}")
+                            last_output_time = time.time()
+                            output_found = True
                     except:
                         pass
                     
-                    time.sleep(0.1)
+                    # Check if we haven't seen output for 30 seconds
+                    if time.time() - last_output_time > 30:
+                        print("⚠️ No output for 30 seconds - process may be hanging")
+                        print("🔍 Checking if this is a Modal deployment issue...")
+                        
+                        # Try to terminate the process
+                        try:
+                            process.terminate()
+                            print("🛑 Terminated hanging process")
+                        except:
+                            pass
+                        break
+                    
+                    if not output_found:
+                        time.sleep(0.1)
                 
-                # After 30 seconds, check final status
+                # After monitoring period, check final status
                 if process.poll() is None:
-                    print("⏰ Process still running after 30 seconds - continuing in background")
+                    print("⏰ Process still running after monitoring period")
+                    print("🔍 This might be normal for long-running SWE-agent tasks")
                 else:
                     print(f"🏁 Final process status: {process.returncode}")
                     
