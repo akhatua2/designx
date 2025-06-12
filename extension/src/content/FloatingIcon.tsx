@@ -7,7 +7,7 @@ import { slackModeManager, type SlackUser, type SlackMessage, SlackBubble } from
 import { jiraModeManager, type JiraUser, type JiraIssue, JiraBubble } from './integrations/jira'
 import type { Project } from './integrations/IntegrationManager'
 
-// Inline styles to ensure the component works even if Tailwind doesn't load
+// Inline styles to ensure the component works exactly as before
 const styles = {
   menuButton: {
     width: '160px',

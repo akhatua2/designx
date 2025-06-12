@@ -3,29 +3,85 @@ import { createRoot } from 'react-dom/client'
 import FloatingIcon from './FloatingIcon'
 import './content.css'
 
-// Function to inject the floating icon
+// Function to inject the floating icon with Shadow DOM encapsulation
 function injectFloatingIcon() {
   // Check if icon already exists
-  const existingIcon = document.getElementById('floating-extension-icon')
+  const existingIcon = document.querySelector('[data-extension-id="designx-floating-icon"]')
   if (existingIcon) return
 
-  // Create container for our React component
-  const container = document.createElement('div')
-  container.id = 'floating-extension-icon'
-  container.style.cssText = `
+  // Create host container for Shadow DOM
+  const shadowHost = document.createElement('div')
+  shadowHost.setAttribute('data-extension-id', 'designx-floating-icon')
+  shadowHost.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 2147483647;
+    pointer-events: none;
+    width: 0;
+    height: 0;
+  `
+
+  // Create Shadow DOM
+  const shadowRoot = shadowHost.attachShadow({ mode: 'open' })
+
+  // Inject the original content CSS into Shadow DOM
+  const style = document.createElement('style')
+  style.textContent = `
+    /* Custom styles for the floating icon to ensure it doesn't inherit page styles */
+    #floating-extension-icon * {
+      box-sizing: border-box;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+    }
+
+    /* Reset specific properties but preserve SVG functionality */
+    #floating-extension-icon button,
+    #floating-extension-icon div {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      font-size: 100%;
+      font: inherit;
+      vertical-align: baseline;
+      background: transparent;
+    }
+
+    /* Ensure SVG icons are visible */
+    #floating-extension-icon svg {
+      display: inline-block;
+      fill: currentColor;
+      stroke: currentColor;
+      vertical-align: middle;
+    }
+
+    #floating-extension-icon {
+      font-size: 14px;
+      line-height: 1.5;
+      color: #374151;
+    }
+  `
+  shadowRoot.appendChild(style)
+
+  // Create React container inside Shadow DOM  
+  const reactContainer = document.createElement('div')
+  reactContainer.id = 'floating-extension-icon'
+  reactContainer.style.cssText = `
     position: fixed;
     bottom: 20px;
     right: 20px;
     z-index: 2147483647;
     pointer-events: none;
   `
+  shadowRoot.appendChild(reactContainer)
 
   // Inject into the page
-  document.body.appendChild(container)
+  document.body.appendChild(shadowHost)
 
   // Create React root and render our component
-  const root = createRoot(container)
+  const root = createRoot(reactContainer)
   root.render(<FloatingIcon />)
+
+  console.log('🎯 DesignX overlay injected with Shadow DOM encapsulation')
 }
 
 // Wait for DOM to be ready
