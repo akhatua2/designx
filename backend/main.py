@@ -751,7 +751,7 @@ async def jira_auth_success(code: str = None, error: str = None):
 @app.post("/api/run-sweagent")
 async def run_sweagent(request: RunSWEAgentRequest):
     """
-    Trigger SWE-agent to run (simplified for testing)
+    Run SWE-agent command (it will deploy itself to Modal)
     """
     try:
         print(f"🚀 SWE-agent trigger requested:")
@@ -761,17 +761,57 @@ async def run_sweagent(request: RunSWEAgentRequest):
         print(f"   OpenAI API key configured: {'Yes' if settings.OPENAI_API_KEY else 'No'}")
         print(f"   Modal token configured: {'Yes' if settings.MODAL_TOKEN_ID else 'No'}")
         
-        # For now, just return success - we can implement the actual execution later
+        # Set up environment variables
+        env = os.environ.copy()
+        env.update({
+            "GITHUB_TOKEN": request.github_token,
+            "OPENAI_API_KEY": settings.OPENAI_API_KEY,
+            "MODAL_TOKEN_ID": settings.MODAL_TOKEN_ID,
+            "MODAL_TOKEN_SECRET": settings.MODAL_TOKEN_SECRET
+        })
+        
+        # Build the SWE-agent command
+        cmd = [
+            "sweagent", "run",
+            "--agent.model.name=gpt-4o-mini",
+            "--config", "config/default.yaml",
+            "--env.deployment.type=modal",
+            "--agent.model.per_instance_cost_limit=1.00",
+            f"--env.repo.github_url={request.repo_url}",
+            f"--problem_statement.github_url={request.issue_url}"
+        ]
+        
+        print(f"🚀 Executing command: {' '.join(cmd)}")
+        
+        # Run the command in the background (non-blocking)
+        process = subprocess.Popen(
+            cmd,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        print(f"✅ SWE-agent process started with PID: {process.pid}")
+        
         return {
             "status": "triggered", 
-            "message": "SWE-agent request logged successfully",
+            "message": "SWE-agent started successfully",
             "repo_url": request.repo_url,
-            "issue_url": request.issue_url
+            "issue_url": request.issue_url,
+            "process_id": process.pid
         }
         
     except Exception as e:
         print(f"❌ Error in SWE-agent trigger: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to trigger SWE-agent: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return {
+            "status": "error",
+            "message": f"Failed to trigger SWE-agent: {str(e)}",
+            "error_type": type(e).__name__
+        }
 
 if __name__ == "__main__":
     import uvicorn
