@@ -3,7 +3,7 @@ import { MessageCircle, Edit3, Github, MessageSquare } from 'lucide-react'
 import { editModeManager } from './edit-mode'
 import { commentModeManager, type SelectedElement, CommentBubble } from './comment-mode'
 import { gitHubModeManager, type GitHubUser, GitHubBubble } from './integrations/github'
-import { slackModeManager, type SlackUser, SlackBubble } from './integrations/slack'
+import { slackModeManager, type SlackUser, type SlackMessage, SlackBubble } from './integrations/slack'
 import type { Project } from './integrations/IntegrationManager'
 
 // Inline styles to ensure the component works even if Tailwind doesn't load
@@ -227,13 +227,18 @@ const FloatingIcon: React.FC = () => {
     slackModeManager.deactivate()
   }
 
-  const handleSlackChannelSelect = async (channel: Project) => {
+  const handleSlackChannelSelect = async (channel: Project): Promise<SlackMessage[]> => {
     if (!channel.id) {
       console.error('Channel ID is required for Slack operations')
       return []
     }
     console.log('💬 Channel selected:', channel.name)
-    return slackModeManager.fetchIssues(channel.id)
+    const issues = await slackModeManager.fetchIssues(String(channel.id))
+    return issues.map(issue => ({
+      ...issue,
+      channel_id: String(channel.id),
+      timestamp: String(issue.id) // Slack uses timestamps as IDs
+    }))
   }
 
   return (
