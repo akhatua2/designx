@@ -157,13 +157,9 @@ const FloatingIcon: React.FC = () => {
     gitHubModeManager.deactivate()
   }
 
-  const handleGitHubRepoSelect = (repo: GitHubRepo) => {
+  const handleGitHubRepoSelect = async (repo: GitHubRepo) => {
     console.log('🐙 Repository selected:', repo.full_name)
-    console.log('Repository URL:', repo.html_url)
-    console.log('---')
-    // Here you would handle repository selection
-    // Maybe open in new tab or perform some action
-    window.open(repo.html_url, '_blank')
+    return gitHubModeManager.fetchPullRequests(repo.full_name)
   }
 
   return (

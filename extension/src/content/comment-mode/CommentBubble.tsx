@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Send, X } from 'lucide-react'
+import { Send, X, ChevronDown, Github } from 'lucide-react'
 import type { SelectedElement } from './CommentModeManager'
+import { gitHubModeManager, type GitHubRepo } from '../github-mode'
 
 interface CommentBubbleProps {
   selectedElement: SelectedElement | null
@@ -14,7 +15,53 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
   onSubmit 
 }) => {
   const [comment, setComment] = useState('')
+  const [isRepoDropdownOpen, setIsRepoDropdownOpen] = useState(false)
+  const [selectedRepo, setSelectedRepo] = useState<GitHubRepo | null>(null)
+  const [repos, setRepos] = useState<GitHubRepo[]>([])
+  const [isCreatingIssue, setIsCreatingIssue] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Load repositories when component mounts and when auth state changes
+  useEffect(() => {
+    // Initial load
+    const initialRepos = gitHubModeManager.getRepositories()
+    console.log('[CommentBubble] Initial mount. Authenticated:', gitHubModeManager.isUserAuthenticated(), 'Repos:', initialRepos)
+    setRepos(initialRepos)
+
+    // Set up auth state change listener
+    const handleAuthStateChange = (isAuthenticated: boolean) => {
+      console.log('[CommentBubble] Auth state changed. Authenticated:', isAuthenticated)
+      if (isAuthenticated) {
+        const repos = gitHubModeManager.getRepositories()
+        console.log('[CommentBubble] Setting repos after auth:', repos)
+        setRepos(repos)
+      } else {
+        console.log('[CommentBubble] Clearing repos after logout')
+        setRepos([])
+        setSelectedRepo(null)
+      }
+    }
+
+    gitHubModeManager.onAuthStateChange(handleAuthStateChange)
+
+    // Cleanup listener on unmount
+    return () => {
+      gitHubModeManager.onAuthStateChange(() => {})
+    }
+  }, [])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsRepoDropdownOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   // Auto-focus textarea when bubble opens
   useEffect(() => {
@@ -25,14 +72,28 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
 
   // Clear comment when element changes
   useEffect(() => {
+    console.log('[CommentBubble] selectedElement changed:', selectedElement)
     setComment('')
   }, [selectedElement])
 
-  const handleSubmit = () => {
-    if (comment.trim()) {
-      onSubmit(comment.trim())
-      setComment('')
-      onClose()
+  const handleSubmit = async () => {
+    if (!comment.trim() || !selectedRepo) return
+
+    setIsCreatingIssue(true)
+    try {
+      const title = `Feedback: ${getMinimalElementInfo(selectedElement!.elementInfo)}`
+      const body = `${comment.trim()}\n\n---\n**Element Info:**\n\`${selectedElement!.elementInfo}\`\n\n**DOM Path:**\n\`${selectedElement!.domPath}\``
+      console.log('[CommentBubble] Creating issue in repo:', selectedRepo.full_name, 'Title:', title)
+      const issueUrl = await gitHubModeManager.createIssue(selectedRepo.full_name, title, body)
+      console.log('[CommentBubble] Issue created. URL:', issueUrl)
+      if (issueUrl) {
+        onSubmit(comment.trim())
+        setComment('')
+        onClose()
+        window.open(issueUrl, '_blank')
+      }
+    } finally {
+      setIsCreatingIssue(false)
     }
   }
 
@@ -56,8 +117,8 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
 
   const bubbleStyles = {
     position: 'fixed' as const,
-    bottom: '72px', // 20px (container bottom) + 44px (pill height) + 8px (gap) = 72px
-    right: '20px', // Match the floating pill's right position
+    bottom: '72px',
+    right: '20px',
     width: '360px',
     height: 'auto',
     borderRadius: '24px',
@@ -106,23 +167,68 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
 
   const buttonContainerStyles = {
     display: 'flex',
-    justifyContent: 'flex-end'
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '8px'
   }
 
-  const submitButtonStyles = {
+  const repoSelectorStyles = {
+    position: 'relative' as const,
+    flex: 1
+  }
+
+  const repoButtonStyles = {
+    width: '100%',
     padding: '4px 8px',
     borderRadius: '12px',
     border: 'none',
     fontSize: '10px',
     fontWeight: '500',
-    cursor: comment.trim() ? 'pointer' : 'not-allowed',
+    cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
-    gap: '3px',
+    gap: '4px',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    color: selectedRepo ? 'white' : 'rgba(255, 255, 255, 0.5)',
+    transition: 'all 0.2s ease'
+  }
+
+  const dropdownStyles = {
+    position: 'absolute' as const,
+    bottom: '100%',
+    left: '0',
+    right: '0',
+    marginBottom: '4px',
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    borderRadius: '12px',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    maxHeight: '200px',
+    overflowY: 'auto' as const,
+    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)'
+  }
+
+  const repoItemStyles = {
+    padding: '6px 8px',
+    fontSize: '10px',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s ease',
+    color: 'rgba(255, 255, 255, 0.9)'
+  }
+
+  const submitButtonStyles = {
+    padding: '4px 12px',
+    borderRadius: '12px',
+    border: 'none',
+    fontSize: '10px',
+    fontWeight: '500',
+    cursor: comment.trim() && selectedRepo ? 'pointer' : 'not-allowed',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
     transition: 'all 0.2s ease',
-    backgroundColor: comment.trim() ? '#3b82f6' : 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: comment.trim() && selectedRepo ? '#3b82f6' : 'rgba(255, 255, 255, 0.1)',
     color: 'white',
-    opacity: comment.trim() ? 1 : 0.5
+    opacity: comment.trim() && selectedRepo ? 1 : 0.5
   }
 
   const closeButtonStyles = {
@@ -153,6 +259,10 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
           .comment-textarea::placeholder {
             color: rgba(255, 255, 255, 0.4);
           }
+
+          .repo-item:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+          }
         `}
       </style>
       <div style={bubbleStyles} data-floating-icon="true">
@@ -181,13 +291,48 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
         />
         
         <div style={buttonContainerStyles}>
+          <div style={repoSelectorStyles} ref={dropdownRef}>
+            <button
+              onClick={() => setIsRepoDropdownOpen(!isRepoDropdownOpen)}
+              style={repoButtonStyles}
+            >
+              <Github size={12} />
+              {selectedRepo ? selectedRepo.name : 'Select repository'}
+              <ChevronDown size={12} />
+            </button>
+
+            {isRepoDropdownOpen && (
+              <div style={dropdownStyles}>
+                {repos.length === 0 ? (
+                  <div style={{ ...repoItemStyles, cursor: 'default' }}>
+                    No repositories available
+                  </div>
+                ) : (
+                  repos.map((repo) => (
+                    <div
+                      key={repo.id}
+                      className="repo-item"
+                      style={repoItemStyles}
+                      onClick={() => {
+                        setSelectedRepo(repo)
+                        setIsRepoDropdownOpen(false)
+                      }}
+                    >
+                      {repo.full_name}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
           <button
             onClick={handleSubmit}
-            disabled={!comment.trim()}
+            disabled={!comment.trim() || !selectedRepo || isCreatingIssue}
             style={submitButtonStyles}
           >
-            <Send size={10} />
-            Send
+            <Send size={12} />
+            {isCreatingIssue ? 'Creating...' : 'Create Issue'}
           </button>
         </div>
       </div>

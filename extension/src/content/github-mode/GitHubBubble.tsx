@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { X, Star, Lock, Globe } from 'lucide-react'
-import type { GitHubRepo, GitHubUser } from './GitHubModeManager'
+import { X, Star, Lock, Globe, GitPullRequest, ArrowLeft } from 'lucide-react'
+import type { GitHubRepo, GitHubUser, GitHubPR } from './GitHubModeManager'
 
 interface GitHubBubbleProps {
   isVisible: boolean
@@ -10,7 +10,7 @@ interface GitHubBubbleProps {
   onClose: () => void
   onAuthenticate: () => void
   onLogout: () => void
-  onSelectRepo: (repo: GitHubRepo) => void
+  onSelectRepo: (repo: GitHubRepo) => Promise<GitHubPR[]>
 }
 
 const GitHubBubble: React.FC<GitHubBubbleProps> = ({ 
@@ -23,6 +23,23 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
   onLogout,
   onSelectRepo
 }) => {
+  const [selectedRepo, setSelectedRepo] = useState<GitHubRepo | null>(null)
+  const [pullRequests, setPullRequests] = useState<GitHubPR[]>([])
+  const [loading, setLoading] = useState(false)
+
+  const handleRepoClick = async (repo: GitHubRepo) => {
+    setLoading(true)
+    setSelectedRepo(repo)
+    const prs = await onSelectRepo(repo)
+    setPullRequests(prs)
+    setLoading(false)
+  }
+
+  const handleBackClick = () => {
+    setSelectedRepo(null)
+    setPullRequests([])
+  }
+
   if (!isVisible) return null
 
   const bubbleStyles = {
@@ -175,6 +192,34 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
     gap: '2px'
   }
 
+  const prItemStyles = {
+    padding: '8px',
+    borderRadius: '6px',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    marginBottom: '6px',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s ease',
+    border: '1px solid transparent'
+  }
+
+  const prTitleStyles = {
+    fontSize: '11px',
+    fontWeight: '500' as const,
+    color: 'white',
+    marginBottom: '4px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px'
+  }
+
+  const prMetaStyles = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    fontSize: '9px',
+    color: 'rgba(255, 255, 255, 0.5)'
+  }
+
   return (
     <>
       <style>
@@ -191,6 +236,11 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
           }
           
           .github-repo-item:hover {
+            background-color: rgba(255, 255, 255, 0.1) !important;
+            border-color: rgba(255, 255, 255, 0.2) !important;
+          }
+
+          .github-pr-item:hover {
             background-color: rgba(255, 255, 255, 0.1) !important;
             border-color: rgba(255, 255, 255, 0.2) !important;
           }
@@ -250,6 +300,85 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
             <button onClick={onAuthenticate} style={authButtonStyles}>
               Connect to GitHub
             </button>
+          ) : selectedRepo ? (
+            <>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '4px', 
+                marginBottom: '12px',
+                fontSize: '10px',
+                color: 'rgba(255, 255, 255, 0.7)',
+                cursor: 'pointer'
+              }}
+              onClick={handleBackClick}
+              >
+                <ArrowLeft size={12} />
+                <span>Back to repositories</span>
+              </div>
+
+              <div style={{ 
+                fontSize: '11px', 
+                fontWeight: '600',
+                marginBottom: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                <GitPullRequest size={12} />
+                Pull Requests for {selectedRepo.name}
+              </div>
+
+              {loading ? (
+                <div style={{ 
+                  textAlign: 'center', 
+                  padding: '20px', 
+                  color: 'rgba(255, 255, 255, 0.5)', 
+                  fontSize: '10px' 
+                }}>
+                  Loading pull requests...
+                </div>
+              ) : pullRequests.length === 0 ? (
+                <div style={{ 
+                  textAlign: 'center', 
+                  padding: '20px', 
+                  color: 'rgba(255, 255, 255, 0.5)', 
+                  fontSize: '10px' 
+                }}>
+                  No open pull requests
+                </div>
+              ) : (
+                pullRequests.map((pr) => (
+                  <div
+                    key={pr.number}
+                    className="github-pr-item"
+                    style={prItemStyles}
+                    onClick={() => window.open(pr.html_url, '_blank')}
+                  >
+                    <div style={prTitleStyles}>
+                      #{pr.number} {pr.title}
+                    </div>
+                    <div style={prMetaStyles}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <img 
+                          src={pr.user.avatar_url} 
+                          alt={pr.user.login}
+                          style={{
+                            width: '12px',
+                            height: '12px',
+                            borderRadius: '50%'
+                          }}
+                        />
+                        {pr.user.login}
+                      </div>
+                      <div>
+                        {new Date(pr.created_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </>
           ) : (
             <>
               <div style={{ fontSize: '10px', marginBottom: '6px', color: 'rgba(255, 255, 255, 0.6)' }}>
@@ -271,7 +400,7 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
                     key={repo.id}
                     className="github-repo-item"
                     style={repoItemStyles}
-                    onClick={() => onSelectRepo(repo)}
+                    onClick={() => handleRepoClick(repo)}
                   >
                     <div style={repoNameStyles}>
                       {repo.private ? <Lock size={10} /> : <Globe size={10} />}
@@ -293,7 +422,7 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
                               width: '6px',
                               height: '6px',
                               borderRadius: '50%',
-                              backgroundColor: '#3178c6' // Default language color
+                              backgroundColor: '#3178c6'
                             }}
                           />
                           {repo.language}

@@ -16,13 +16,26 @@ export interface GitHubUser {
   html_url: string
 }
 
+export interface GitHubPR {
+  number: number
+  title: string
+  html_url: string
+  user: {
+    login: string
+    avatar_url: string
+  }
+  created_at: string
+  state: string
+}
+
 export class GitHubModeManager {
   private isActive = false
   private isAuthenticated = false
   private user: GitHubUser | null = null
   private repos: GitHubRepo[] = []
+  private token: string | null = null
   private onStateChangeCallback: ((isActive: boolean) => void) | null = null
-  private onAuthStateChangeCallback: ((isAuthenticated: boolean, user?: GitHubUser) => void) | null = null
+  private onAuthStateChangeCallbacks: ((isAuthenticated: boolean, user?: GitHubUser) => void)[] = []
 
   // GitHub OAuth configuration - Client ID is safe to expose publicly
   private readonly CLIENT_ID = 'Ov23li3fozricPyZNVOi' // Replace with actual Client ID
@@ -301,9 +314,9 @@ export class GitHubModeManager {
   }
 
   private notifyAuthStateChange() {
-    if (this.onAuthStateChangeCallback) {
-      this.onAuthStateChangeCallback(this.isAuthenticated, this.user || undefined)
-    }
+    this.onAuthStateChangeCallbacks.forEach(cb => {
+      cb(this.isAuthenticated, this.user || undefined)
+    })
   }
 
   public activate() {
@@ -351,13 +364,79 @@ export class GitHubModeManager {
   }
 
   public onAuthStateChange(callback: (isAuthenticated: boolean, user?: GitHubUser) => void) {
-    this.onAuthStateChangeCallback = callback
+    this.onAuthStateChangeCallbacks.push(callback)
   }
 
   public cleanup() {
     this.deactivate()
     this.onStateChangeCallback = null
-    this.onAuthStateChangeCallback = null
+    this.onAuthStateChangeCallbacks = []
+  }
+
+  public async fetchPullRequests(repoFullName: string): Promise<GitHubPR[]> {
+    console.log('🔄 Fetching pull requests for', repoFullName)
+    const token = await this.getStoredToken()
+    
+    if (!token) {
+      console.error('❌ No token available to fetch PRs')
+      return []
+    }
+
+    try {
+      const response = await fetch(`https://api.github.com/repos/${repoFullName}/pulls?state=open`, {
+        headers: {
+          'Authorization': `token ${token}`,
+          'Accept': 'application/vnd.github.v3+json'
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch PRs: ${response.status}`)
+      }
+
+      const prs: GitHubPR[] = await response.json()
+      console.log('✅ Fetched', prs.length, 'pull requests')
+      return prs
+    } catch (error) {
+      console.error('❌ Error fetching pull requests:', error)
+      return []
+    }
+  }
+
+  public async createIssue(repoFullName: string, title: string, body: string): Promise<string | null> {
+    console.log('📝 Creating issue in', repoFullName)
+    const token = await this.getStoredToken()
+    
+    if (!token) {
+      console.error('❌ No token available to create issue')
+      return null
+    }
+
+    try {
+      const response = await fetch(`https://api.github.com/repos/${repoFullName}/issues`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `token ${token}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          title,
+          body
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to create issue: ${response.status}`)
+      }
+
+      const issue = await response.json()
+      console.log('✅ Created issue:', issue.html_url)
+      return issue.html_url
+    } catch (error) {
+      console.error('❌ Error creating issue:', error)
+      return null
+    }
   }
 }
 
