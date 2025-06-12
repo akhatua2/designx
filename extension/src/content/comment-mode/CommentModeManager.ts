@@ -34,11 +34,19 @@ const generateDOMPath = (element: Element): string => {
   return path.join(' > ')
 }
 
+export interface SelectedElement {
+  element: Element
+  domPath: string
+  elementInfo: string
+}
+
 export class CommentModeManager {
   private isActive = false
+  private isPaused = false // New flag for pausing highlighting
   private hoveredElement: Element | null = null
   private originalCursor = ''
   private onStateChangeCallback: ((isActive: boolean) => void) | null = null
+  private onElementSelectedCallback: ((elementData: SelectedElement) => void) | null = null
 
   private readonly highlightStyles = {
     outline: '2px solid #3b82f6',
@@ -49,7 +57,7 @@ export class CommentModeManager {
 
   // Handle mouse move for highlighting elements
   private handleMouseMove = (e: MouseEvent) => {
-    if (!this.isActive) return
+    if (!this.isActive || this.isPaused) return
     
     const target = e.target as Element
     
@@ -68,9 +76,9 @@ export class CommentModeManager {
     }
   }
 
-  // Handle click to log DOM path for comments
+  // Handle click to select element for commenting
   private handleElementClick = (e: MouseEvent) => {
-    if (!this.isActive) return
+    if (!this.isActive || this.isPaused) return
     
     e.preventDefault()
     e.stopPropagation()
@@ -81,11 +89,43 @@ export class CommentModeManager {
     if (target.closest('[data-floating-icon]')) return
     
     const domPath = generateDOMPath(target)
+    const elementInfo = this.getElementInfo(target)
+    
     console.log('💬 Element clicked in comment mode:')
     console.log('DOM Path:', domPath)
     console.log('Element:', target)
     console.log('Ready to add comment to this element!')
     console.log('---')
+
+    // Notify UI to show comment bubble
+    if (this.onElementSelectedCallback) {
+      this.onElementSelectedCallback({
+        element: target,
+        domPath,
+        elementInfo
+      })
+    }
+
+    // Pause highlighting when comment bubble opens
+    this.pause()
+  }
+
+  private getElementInfo(element: Element): string {
+    const tagName = element.tagName.toLowerCase()
+    const id = element.id ? `#${element.id}` : ''
+    const classes = element.className && typeof element.className === 'string' 
+      ? `.${element.className.trim().split(/\s+/).slice(0, 2).join('.')}` 
+      : ''
+    
+    let info = `<${tagName}${id}${classes}>`
+    
+    // Add text content if it's short and meaningful
+    const textContent = element.textContent?.trim()
+    if (textContent && textContent.length > 0 && textContent.length < 50) {
+      info += ` "${textContent}"`
+    }
+    
+    return info
   }
 
   // Handle ESC key to exit comment mode
@@ -128,6 +168,7 @@ export class CommentModeManager {
     if (this.isActive) return
     
     this.isActive = true
+    this.isPaused = false
     this.originalCursor = document.body.style.cursor
     
     document.addEventListener('mousemove', this.handleMouseMove, true)
@@ -143,6 +184,7 @@ export class CommentModeManager {
     if (!this.isActive) return
     
     this.isActive = false
+    this.isPaused = false
     
     document.removeEventListener('mousemove', this.handleMouseMove, true)
     document.removeEventListener('click', this.handleElementClick, true)
@@ -153,6 +195,23 @@ export class CommentModeManager {
     this.notifyStateChange()
     
     console.log('💬 Comment mode deactivated')
+  }
+
+  public pause() {
+    if (!this.isActive) return
+    
+    this.isPaused = true
+    document.body.style.cursor = this.originalCursor
+    // Don't clear highlights when pausing - keep the selected element highlighted
+    console.log('💬 Comment mode paused for text input')
+  }
+
+  public resume() {
+    if (!this.isActive) return
+    
+    this.isPaused = false
+    document.body.style.cursor = 'crosshair'
+    console.log('💬 Comment mode resumed')
   }
 
   public toggle() {
@@ -167,13 +226,22 @@ export class CommentModeManager {
     return this.isActive
   }
 
+  public isCommentModePaused(): boolean {
+    return this.isPaused
+  }
+
   public onStateChange(callback: (isActive: boolean) => void) {
     this.onStateChangeCallback = callback
+  }
+
+  public onElementSelected(callback: (elementData: SelectedElement) => void) {
+    this.onElementSelectedCallback = callback
   }
 
   public cleanup() {
     this.deactivate()
     this.onStateChangeCallback = null
+    this.onElementSelectedCallback = null
   }
 }
 
