@@ -5,6 +5,7 @@ import httpx
 from pydantic import BaseModel
 from config import settings
 import os
+import subprocess
 
 app = FastAPI(
     title="DesignX Extension API",
@@ -47,6 +48,11 @@ class JiraTokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     scope: str
+
+class RunSWEAgentRequest(BaseModel):
+    repo_url: str
+    issue_url: str
+    github_token: str
 
 @app.get("/favicon.ico")
 async def favicon():
@@ -741,6 +747,36 @@ async def jira_auth_success(code: str = None, error: str = None):
     
     print("❌ Auth success page accessed without code or error")
     raise HTTPException(status_code=400, detail="Missing authorization code")
+
+@app.post("/api/run-sweagent")
+async def run_sweagent(request: RunSWEAgentRequest):
+    """
+    Run SWE-agent on a GitHub issue
+    """
+    try:
+        # Set environment variables for SWE-agent
+        os.environ["GITHUB_TOKEN"] = request.github_token
+        os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
+        os.environ["MODAL_TOKEN_ID"] = settings.MODAL_TOKEN_ID
+        os.environ["MODAL_TOKEN_SECRET"] = settings.MODAL_TOKEN_SECRET
+
+        # Build the command
+        command = [
+            "sweagent", "run",
+            "--agent.model.name=gpt-4o-mini",
+            "--config", "config/default.yaml",
+            "--env.deployment.type=modal",
+            "--agent.model.per_instance_cost_limit=1.00",
+            f"--env.repo.github_url={request.repo_url}",
+            f"--problem_statement.github_url={request.issue_url}"
+        ]
+
+        # Run the command (non-blocking)
+        subprocess.Popen(command)
+
+        return {"status": "triggered", "message": "SWE-agent started"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to run SWE-agent: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

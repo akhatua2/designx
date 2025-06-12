@@ -504,6 +504,10 @@ export class GitHubModeManager implements IntegrationManager {
       return null
     }
   }
+
+  public async getToken(): Promise<string | null> {
+    return this.getStoredToken()
+  }
 }
 
 // Create a singleton instance

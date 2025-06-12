@@ -126,6 +126,30 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
         const body = `${comment.trim()}\n\n---\n**Element Info:**\n\`${selectedElement!.elementInfo}\`\n\n**DOM Path:**\n\`${selectedElement!.domPath}\``
         const issueUrl = await gitHubModeManager.createIssue(selectedChannel.full_name, title, body)
         if (issueUrl) {
+          // Get the GitHub token
+          const token = await gitHubModeManager.getToken()
+          if (!token) {
+            console.error('No GitHub token available')
+            return
+          }
+
+          // Call our backend to run SWE-agent
+          const response = await fetch('https://designx-705035175306.us-central1.run.app/api/run-sweagent', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              repo_url: `https://github.com/${selectedChannel.full_name}`,
+              issue_url: issueUrl,
+              github_token: token
+            })
+          });
+
+          if (!response.ok) {
+            console.error('Failed to trigger SWE-agent:', await response.text());
+          }
+
           onSubmit(comment.trim())
           setComment('')
           onClose()

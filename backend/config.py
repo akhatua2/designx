@@ -39,6 +39,14 @@ class Settings(BaseSettings):
     JIRA_CLIENT_SECRET: str = ""
     JIRA_REDIRECT_URI: str = "https://designx-705035175306.us-central1.run.app/api/jira/callback"
 
+    # SWE-agent settings
+    OPENAI_API_KEY: str = ""
+    GITHUB_TOKEN: str = ""
+
+    # Modal settings
+    MODAL_TOKEN_ID: str = ""
+    MODAL_TOKEN_SECRET: str = ""
+
     class Config:
         env_file = ".env"
         case_sensitive = True
