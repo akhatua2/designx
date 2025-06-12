@@ -199,16 +199,50 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
       <div style={bubbleStyles} data-floating-icon="true">
         <div style={headerStyles}>
           <div style={titleStyles}>
-            🐙 GitHub
+            {isAuthenticated && user ? (
+              <>
+                <img 
+                  src={user.avatar_url} 
+                  alt={user.name || user.login} 
+                  style={{
+                    width: '16px',
+                    height: '16px',
+                    borderRadius: '50%',
+                    marginRight: '4px'
+                  }} 
+                />
+                <span>{user.name || user.login}</span>
+              </>
+            ) : (
+              <>🐙 GitHub</>
+            )}
           </div>
-          <button
-            onClick={onClose}
-            style={closeButtonStyles}
-            onMouseEnter={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)'}
-            onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)'}
-          >
-            <X size={12} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {isAuthenticated && (
+              <button 
+                onClick={onLogout} 
+                style={{
+                  fontSize: '9px',
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  border: 'none',
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  cursor: 'pointer'
+                }}
+              >
+                Logout
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              style={closeButtonStyles}
+              onMouseEnter={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)'}
+              onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)'}
+            >
+              <X size={12} />
+            </button>
+          </div>
         </div>
         
         <div style={contentStyles}>
@@ -218,16 +252,6 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
             </button>
           ) : (
             <>
-              {user && (
-                <div style={userInfoStyles}>
-                  <img src={user.avatar_url} alt={user.name} style={avatarStyles} />
-                  <div style={userNameStyles}>{user.name || user.login}</div>
-                  <button onClick={onLogout} style={logoutButtonStyles}>
-                    Logout
-                  </button>
-                </div>
-              )}
-              
               <div style={{ fontSize: '10px', marginBottom: '6px', color: 'rgba(255, 255, 255, 0.6)' }}>
                 Your Repositories ({repos.length})
               </div>
