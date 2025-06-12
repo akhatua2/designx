@@ -795,6 +795,7 @@ async def run_sweagent(request: RunSWEAgentRequest):
         
         print(f"🚀 Executing command: {' '.join(cmd)}")
         print(f"🔧 Environment variables set: GITHUB_TOKEN, OPENAI_API_KEY, MODAL_TOKEN_ID, MODAL_TOKEN_SECRET")
+        print(f"🔧 Working directory: /app/SWE-agent")
         
         # First, let's try to run sweagent --help to see if it works
         try:
@@ -802,7 +803,8 @@ async def run_sweagent(request: RunSWEAgentRequest):
                 ["sweagent", "--help"],
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=30,
+                cwd="/app/SWE-agent"
             )
             print(f"📋 sweagent --help exit code: {help_result.returncode}")
             if help_result.stdout:
@@ -821,7 +823,8 @@ async def run_sweagent(request: RunSWEAgentRequest):
             stderr=subprocess.STDOUT,  # Combine stderr with stdout
             text=True,
             bufsize=1,  # Line buffered
-            universal_newlines=True
+            universal_newlines=True,
+            cwd="/app/SWE-agent"  # Run from SWE-agent directory
         )
         
         print(f"✅ SWE-agent process started with PID: {process.pid}")

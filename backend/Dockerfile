@@ -16,12 +16,11 @@ COPY requirements.txt .
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install SWE-agent from source
-RUN git clone --depth 1 https://github.com/SWE-agent/SWE-agent.git /tmp/SWE-agent \
-    && cd /tmp/SWE-agent \
+# Install SWE-agent from source (following the exact docs)
+RUN git clone https://github.com/SWE-agent/SWE-agent.git /app/SWE-agent \
+    && cd /app/SWE-agent \
     && python -m pip install --upgrade pip \
-    && pip install --no-cache-dir -e . \
-    && rm -rf /tmp/SWE-agent \
+    && pip install --editable . \
     && apt-get purge -y build-essential \
     && apt-get autoremove -y \
     && apt-get clean \
@@ -33,6 +32,7 @@ COPY . .
 # Set environment variables
 ENV PORT=8000
 ENV HOST=0.0.0.0
+ENV PYTHONPATH=/app/SWE-agent:$PYTHONPATH
 
 # Expose the port
 EXPOSE 8000
