@@ -39,9 +39,9 @@ export class GitHubModeManager {
 
   // GitHub OAuth configuration - Client ID is safe to expose publicly
   private readonly CLIENT_ID = 'Ov23li3fozricPyZNVOi' // Replace with actual Client ID
-  private readonly REDIRECT_URI = 'http://localhost:8000/api/github/callback' // Use backend for callback
+  private readonly REDIRECT_URI = 'https://designx-705035175306.us-central1.run.app/api/github/callback' // Use backend for callback
   private readonly SCOPES = 'repo read:user'
-  private readonly BACKEND_URL = 'http://localhost:8000' // Backend API base URL
+  private readonly BACKEND_URL = 'https://designx-705035175306.us-central1.run.app' // Backend API base URL
 
   public async authenticate(): Promise<boolean> {
     try {
