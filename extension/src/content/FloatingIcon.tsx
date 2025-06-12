@@ -1,5 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { MessageCircle, Edit3, Github } from 'lucide-react'
+import { editModeManager } from './edit-mode'
+import { commentModeManager } from './comment-mode'
 
 // Inline styles to ensure the component works even if Tailwind doesn't load
 const styles = {
@@ -24,26 +26,67 @@ const styles = {
 
 const FloatingIcon: React.FC = () => {
   const [selectedIcon, setSelectedIcon] = useState<string | null>(null)
+  const selectedIconRef = useRef<string | null>(null)
+
+  // Keep ref in sync with state
+  selectedIconRef.current = selectedIcon
+
+  // Set up mode state synchronization and cleanup on unmount
+  useEffect(() => {
+    // Register callback to sync UI state with edit mode state
+    editModeManager.onStateChange((isActive) => {
+      if (isActive) {
+        
+        // Deactivate comment mode if edit mode is activated
+        commentModeManager.deactivate()
+        setSelectedIcon('edit')
+      } else if (selectedIconRef.current === 'edit') {
+        setSelectedIcon(null)
+      }
+    })
+
+    // Register callback to sync UI state with comment mode state
+    commentModeManager.onStateChange((isActive) => {
+      if (isActive) {
+        // Deactivate edit mode if comment mode is activated
+        editModeManager.deactivate()
+        setSelectedIcon('comment')
+      } else if (selectedIconRef.current === 'comment') {
+        setSelectedIcon(null)
+      }
+    })
+
+    return () => {
+      editModeManager.cleanup()
+      commentModeManager.cleanup()
+    }
+  }, []) // Remove selectedIcon dependency
 
   const handleGitHub = () => {
     console.log('Github feature activated!')
+    // Deactivate other modes when switching to GitHub
+    editModeManager.deactivate()
+    commentModeManager.deactivate()
     setSelectedIcon(selectedIcon === 'github' ? null : 'github')
   }
 
   const handleComment = () => {
     console.log('Comment feature activated!')
-    setSelectedIcon(selectedIcon === 'comment' ? null : 'comment')
+    commentModeManager.toggle()
+    // Note: selectedIcon state will be updated via the onStateChange callback
   }
 
   const handleEdit = () => {
     console.log('Edit feature activated!')
-    setSelectedIcon(selectedIcon === 'edit' ? null : 'edit')
+    editModeManager.toggle()
+    // Note: selectedIcon state will be updated via the onStateChange callback
   }
 
   return (
     <div 
       style={styles.menuButton}
       className="relative"
+      data-floating-icon="true"
     >
       <button
         onClick={handleGitHub}

@@ -1,0 +1,1 @@
+export { CommentModeManager, commentModeManager } from './CommentModeManager' 
