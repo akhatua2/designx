@@ -39,6 +39,8 @@ export class EditModeManager {
   private hoveredElement: Element | null = null
   private originalCursor = ''
   private onStateChangeCallback: ((isActive: boolean) => void) | null = null
+  private currentlyEditing: HTMLElement | null = null
+  private originalContent: string | null = null
 
   private readonly highlightStyles = {
     outline: '2px solid #3b82f6',
@@ -49,7 +51,7 @@ export class EditModeManager {
 
   // Handle mouse move for highlighting elements
   private handleMouseMove = (e: MouseEvent) => {
-    if (!this.isActive) return
+    if (!this.isActive || this.currentlyEditing) return
     
     const target = e.target as Element
     
@@ -68,30 +70,130 @@ export class EditModeManager {
     }
   }
 
-  // Handle click to log DOM path
+  private isTextElement(element: Element): boolean {
+    // Check if element contains primarily text content
+    const text = element.textContent || ''
+    const hasChildElements = element.children.length > 0
+    return text.trim().length > 0 && !hasChildElements
+  }
+
+  private makeElementEditable(element: HTMLElement) {
+    if (!element) return;
+    
+    this.currentlyEditing = element
+    this.originalContent = element.textContent
+
+    try {
+      // Store original attributes
+      const originalAttributes = {
+        contentEditable: element.contentEditable,
+        style: element.getAttribute('style')
+      }
+
+      // Make element editable
+      element.contentEditable = 'true'
+      element.style.setProperty('cursor', 'text')
+      element.focus()
+
+      // Handle finishing edit
+      const finishEdit = (save: boolean) => {
+        if (!this.currentlyEditing) return
+
+        try {
+          // Restore original attributes
+          this.currentlyEditing.contentEditable = originalAttributes.contentEditable
+          if (originalAttributes.style) {
+            this.currentlyEditing.setAttribute('style', originalAttributes.style)
+          } else {
+            // Only remove style if it exists to avoid null reference
+            if (this.currentlyEditing.hasAttribute('style')) {
+              this.currentlyEditing.removeAttribute('style')
+            }
+          }
+
+          // If not saving, restore original content
+          if (!save && this.originalContent !== null) {
+            this.currentlyEditing.textContent = this.originalContent
+          }
+
+          // Log the changes if saved
+          if (save && this.originalContent !== this.currentlyEditing.textContent) {
+            console.log('📝 Text edited:')
+            console.log('Element:', this.currentlyEditing)
+            console.log('Original:', this.originalContent)
+            console.log('New:', this.currentlyEditing.textContent)
+            console.log('DOM Path:', generateDOMPath(this.currentlyEditing))
+            console.log('---')
+          }
+        } catch (error) {
+          console.error('Error while finishing edit:', error)
+        }
+
+        this.currentlyEditing = null
+        this.originalContent = null
+      }
+
+      // Handle blur and keyboard events
+      const handleBlur = () => finishEdit(true)
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          finishEdit(false)
+          e.preventDefault()
+        } else if (e.key === 'Enter' && !e.shiftKey) {
+          finishEdit(true)
+          e.preventDefault()
+        }
+      }
+
+      element.addEventListener('blur', handleBlur)
+      element.addEventListener('keydown', handleKeyDown)
+
+      // Cleanup event listeners when done
+      const cleanup = () => {
+        if (element) {
+          element.removeEventListener('blur', handleBlur)
+          element.removeEventListener('keydown', handleKeyDown)
+        }
+      }
+
+      element.addEventListener('blur', cleanup, { once: true })
+    } catch (error) {
+      console.error('Error while making element editable:', error)
+      this.currentlyEditing = null
+      this.originalContent = null
+    }
+  }
+
+  // Handle click to edit text or log DOM path
   private handleElementClick = (e: MouseEvent) => {
     if (!this.isActive) return
     
     e.preventDefault()
     e.stopPropagation()
     
-    const target = e.target as Element
+    const target = e.target as HTMLElement
     
     // Don't process clicks on the floating icon itself
     if (target.closest('[data-floating-icon]')) return
-    
-    const domPath = generateDOMPath(target)
-    console.log('🎯 Element clicked in edit mode:')
-    console.log('DOM Path:', domPath)
-    console.log('Element:', target)
-    console.log('---')
+
+    // If element is text-based, make it editable
+    if (this.isTextElement(target)) {
+      this.makeElementEditable(target)
+    } else {
+      // For non-text elements, just log the DOM path as before
+      const domPath = generateDOMPath(target)
+      console.log('🎯 Element clicked in edit mode:')
+      console.log('DOM Path:', domPath)
+      console.log('Element:', target)
+      console.log('---')
+    }
   }
 
   // Handle ESC key to exit edit mode
   private handleKeyDown = (e: KeyboardEvent) => {
     if (!this.isActive) return
     
-    if (e.key === 'Escape') {
+    if (e.key === 'Escape' && !this.currentlyEditing) {
       e.preventDefault()
       this.deactivate()
       console.log('🔑 Edit mode exited with ESC key')
@@ -142,6 +244,12 @@ export class EditModeManager {
     if (!this.isActive) return
     
     this.isActive = false
+    
+    // If currently editing, finish the edit with save
+    if (this.currentlyEditing) {
+      const event = new Event('blur')
+      this.currentlyEditing.dispatchEvent(event)
+    }
     
     document.removeEventListener('mousemove', this.handleMouseMove, true)
     document.removeEventListener('click', this.handleElementClick, true)
