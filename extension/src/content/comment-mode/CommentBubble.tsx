@@ -3,9 +3,11 @@ import { Send, X, ChevronDown, Github, Slack } from 'lucide-react'
 import type { SelectedElement } from './CommentModeManager'
 import { gitHubModeManager } from '../integrations/github'
 import { slackModeManager } from '../integrations/slack'
+import { jiraModeManager } from '../integrations/jira'
 import type { Project } from '../integrations/IntegrationManager'
 import type { GitHubRepo } from '../integrations/github/GitHubModeManager'
 import type { SlackChannel } from '../integrations/slack/SlackModeManager'
+import type { JiraProject } from '../integrations/jira/JiraModeManager'
 
 interface CommentBubbleProps {
   selectedElement: SelectedElement | null
@@ -13,7 +15,7 @@ interface CommentBubbleProps {
   onSubmit: (comment: string) => void
 }
 
-type Platform = 'github' | 'slack'
+type Platform = 'github' | 'slack' | 'jira'
 
 // Type guard for GitHub repos
 function isGitHubRepo(project: Project): project is GitHubRepo {
@@ -23,6 +25,11 @@ function isGitHubRepo(project: Project): project is GitHubRepo {
 // Type guard for Slack channels
 function isSlackChannel(project: Project): project is SlackChannel {
   return 'is_channel' in project
+}
+
+// Type guard for Jira projects
+function isJiraProject(project: Project): project is JiraProject {
+  return 'key' in project && 'projectTypeKey' in project
 }
 
 const CommentBubble: React.FC<CommentBubbleProps> = ({ 
@@ -44,6 +51,7 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
     const loadChannels = () => {
       const isGitHubAuth = gitHubModeManager.isUserAuthenticated()
       const isSlackAuth = slackModeManager.isUserAuthenticated()
+      const isJiraAuth = jiraModeManager.isUserAuthenticated()
       
       if (selectedPlatform === 'github' && isGitHubAuth) {
         const repos = gitHubModeManager.getProjects()
@@ -51,6 +59,9 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
       } else if (selectedPlatform === 'slack' && isSlackAuth) {
         const slackChannels = slackModeManager.getProjects()
         setChannels(slackChannels)
+      } else if (selectedPlatform === 'jira' && isJiraAuth) {
+        const jiraProjects = jiraModeManager.getProjects()
+        setChannels(jiraProjects)
       } else {
         setChannels([])
       }
@@ -66,13 +77,18 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
     const handleSlackAuthChange = () => {
       if (selectedPlatform === 'slack') loadChannels()
     }
+    const handleJiraAuthChange = () => {
+      if (selectedPlatform === 'jira') loadChannels()
+    }
 
     gitHubModeManager.onAuthStateChange(handleGitHubAuthChange)
     slackModeManager.onAuthStateChange(handleSlackAuthChange)
+    jiraModeManager.onAuthStateChange(handleJiraAuthChange)
 
     return () => {
       gitHubModeManager.onAuthStateChange(() => {})
       slackModeManager.onAuthStateChange(() => {})
+      jiraModeManager.onAuthStateChange(() => {})
     }
   }, [selectedPlatform])
 
@@ -126,6 +142,16 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
           setComment('')
           onClose()
         }
+      } else if (selectedPlatform === 'jira' && isJiraProject(selectedChannel)) {
+        const title = `Feedback: ${getMinimalElementInfo(selectedElement!.elementInfo)}`
+        const body = `${comment.trim()}\n\n---\nElement Info: ${selectedElement!.elementInfo}\n\nDOM Path: ${selectedElement!.domPath}`
+        const issueUrl = await jiraModeManager.createIssue(selectedChannel.key, title, body)
+        if (issueUrl) {
+          onSubmit(comment.trim())
+          setComment('')
+          onClose()
+          window.open(issueUrl, '_blank')
+        }
       }
     } finally {
       setIsCreatingMessage(false)
@@ -161,6 +187,8 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
       return channel.full_name
     } else if (isSlackChannel(channel)) {
       return `#${channel.name}`
+    } else if (isJiraProject(channel)) {
+      return `${channel.key} - ${channel.name}`
     }
     return channel.name || ''
   }
@@ -319,8 +347,20 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
     if (selectedPlatform === 'slack' && !slackModeManager.isUserAuthenticated()) {
       return 'Sign in to Slack to send messages'
     }
-    return selectedPlatform === 'github' ? 'Select repository' : 'Select channel'
+    if (selectedPlatform === 'jira' && !jiraModeManager.isUserAuthenticated()) {
+      return 'Sign in to Jira to create issues'
+    }
+    return selectedPlatform === 'github' ? 'Select repository' : selectedPlatform === 'slack' ? 'Select channel' : 'Select project'
   }
+
+  // Simple Jira icon component (inline SVG)
+  const JiraIcon = ({ size = 12 }: { size?: number }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 6.62 5.367 11.987 11.988 11.987s11.987-5.367 11.987-11.987C24.004 5.367 18.637.001 12.017.001zm-.008 21.347c-5.157 0-9.36-4.202-9.36-9.36 0-5.157 4.203-9.36 9.36-9.36s9.36 4.203 9.36 9.36c0 5.158-4.203 9.36-9.36 9.36z"/>
+      <path d="M12.017 4.422L8.78 7.659l3.237 3.237 3.237-3.237z" fill="#2684FF"/>
+      <path d="M12.017 12.776l3.237 3.237-3.237 3.237-3.237-3.237z"/>
+    </svg>
+  )
 
   return (
     <>
@@ -376,6 +416,13 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
             <Slack size={12} />
             Slack
           </button>
+          <button
+            onClick={() => handlePlatformChange('jira')}
+            style={platformButtonStyles(selectedPlatform === 'jira')}
+          >
+            <JiraIcon size={12} />
+            Jira
+          </button>
         </div>
         
         <textarea
@@ -394,7 +441,9 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
               onClick={() => setIsChannelDropdownOpen(!isChannelDropdownOpen)}
               style={channelButtonStyles}
             >
-              {selectedPlatform === 'github' ? <Github size={12} /> : <Slack size={12} />}
+              {selectedPlatform === 'github' ? <Github size={12} /> : 
+               selectedPlatform === 'slack' ? <Slack size={12} /> : 
+               <JiraIcon size={12} />}
               {selectedChannel ? getChannelDisplayName(selectedChannel) : getAuthPrompt()}
               <ChevronDown size={12} />
             </button>
@@ -405,7 +454,9 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
                   <div style={{ ...channelItemStyles, cursor: 'default' }}>
                     {selectedPlatform === 'github' 
                       ? 'No repositories available' 
-                      : 'No channels available'}
+                      : selectedPlatform === 'slack' 
+                        ? 'No channels available' 
+                        : 'No projects available'}
                   </div>
                 ) : (
                   channels.map((channel) => (
@@ -436,7 +487,9 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
               ? 'Sending...' 
               : selectedPlatform === 'github' 
                 ? 'Create Issue' 
-                : 'Send Message'}
+                : selectedPlatform === 'slack' 
+                  ? 'Send Message' 
+                  : 'Create Issue'}
           </button>
         </div>
       </div>

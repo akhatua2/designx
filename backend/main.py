@@ -38,6 +38,16 @@ class SlackTokenResponse(BaseModel):
     team: dict
     authed_user: dict
 
+# Add Jira token request/response models
+class JiraTokenRequest(BaseModel):
+    code: str
+
+class JiraTokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    scope: str
+
 @app.get("/favicon.ico")
 async def favicon():
     """
@@ -492,6 +502,227 @@ async def slack_auth_success(code: str = None, error: str = None):
                     if (window.opener) {{
                         window.opener.postMessage({{
                             type: 'SLACK_AUTH_SUCCESS',
+                            code: '{code}'
+                        }}, '*');
+                        console.log('📨 Success message sent to parent window');
+                    }} else {{
+                        console.log('⚠️ No parent window found to send message to');
+                    }}
+                    
+                    // Close window after sending message
+                    setTimeout(() => {{ 
+                        window.close(); 
+                    }}, 1000);
+                </script>
+            </body>
+        </html>
+        """
+    
+    print("❌ Auth success page accessed without code or error")
+    raise HTTPException(status_code=400, detail="Missing authorization code")
+
+@app.post("/api/jira/exchange", response_model=JiraTokenResponse)
+async def exchange_jira_token(request: JiraTokenRequest):
+    """
+    Exchange Jira OAuth authorization code for access token
+    """
+    print(f"🔄 Received Jira token exchange request")
+    print(f"🔧 Authorization code length: {len(request.code)}")
+    
+    try:
+        jira_client_id = settings.JIRA_CLIENT_ID if hasattr(settings, 'JIRA_CLIENT_ID') else None
+        jira_client_secret = settings.JIRA_CLIENT_SECRET if hasattr(settings, 'JIRA_CLIENT_SECRET') else None
+        jira_redirect_uri = settings.JIRA_REDIRECT_URI if hasattr(settings, 'JIRA_REDIRECT_URI') else None
+        
+        print(f"🔧 Jira Client ID: {jira_client_id}")
+        print(f"🔧 Jira Client Secret configured: {'Yes' if jira_client_secret else 'No'}")
+        print(f"🔧 Jira Redirect URI: {jira_redirect_uri}")
+        
+        if not jira_client_id or not jira_client_secret:
+            print("❌ Jira credentials not configured")
+            raise HTTPException(
+                status_code=500, 
+                detail="Jira credentials not configured"
+            )
+        
+        print("📡 Making request to Jira token endpoint...")
+        # Exchange code for access token with Jira
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://auth.atlassian.com/oauth/token",
+                data={
+                    "grant_type": "authorization_code",
+                    "client_id": jira_client_id,
+                    "client_secret": jira_client_secret,
+                    "code": request.code,
+                    "redirect_uri": jira_redirect_uri
+                },
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded"
+                }
+            )
+            
+        print(f"📡 Jira response status: {response.status_code}")
+        print(f"📡 Jira response body: {response.text}")
+        
+        if response.status_code != 200:
+            error_msg = f"Jira API error: {response.status_code}"
+            try:
+                error_data = response.json()
+                if "error_description" in error_data:
+                    error_msg = error_data["error_description"]
+                elif "error" in error_data:
+                    error_msg = error_data["error"]
+            except:
+                pass
+            
+            print(f"❌ Jira API error: {error_msg}")
+            raise HTTPException(status_code=400, detail=error_msg)
+            
+        token_data = response.json()
+        print(f"📄 Jira response data keys: {list(token_data.keys())}")
+        
+        # Check for Jira API errors
+        if "error" in token_data:
+            error_msg = token_data.get("error_description", token_data["error"])
+            print(f"❌ Jira OAuth error: {error_msg}")
+            raise HTTPException(status_code=400, detail=f"Jira OAuth error: {error_msg}")
+        
+        if "access_token" not in token_data:
+            print("❌ No access token in Jira response")
+            raise HTTPException(status_code=400, detail="No access token received from Jira")
+            
+        print("✅ Jira token exchange successful")
+        return JiraTokenResponse(
+            access_token=token_data["access_token"],
+            refresh_token=token_data.get("refresh_token", ""),
+            token_type="bearer",
+            scope=token_data.get("scope", "")
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Unexpected error in Jira token exchange: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@app.get("/api/jira/callback", response_class=HTMLResponse)
+async def jira_oauth_callback(code: str = None, error: str = None):
+    """
+    Jira OAuth callback endpoint - redirects to success page with parameters
+    """
+    print(f"🔄 Jira OAuth callback received")
+    print(f"🔧 Code present: {'Yes' if code else 'No'}")
+    print(f"🔧 Error present: {'Yes' if error else 'No'}")
+    
+    if error:
+        print(f"❌ Jira OAuth callback error: {error}")
+        return f"""
+        <html>
+            <head><title>Jira Auth Error</title></head>
+            <body>
+                <script>
+                    console.log('❌ OAuth error: {error}');
+                    window.location.href = '/auth/jira/success?error=' + encodeURIComponent('{error}');
+                </script>
+            </body>
+        </html>
+        """
+    
+    if code:
+        print(f"✅ Jira OAuth callback successful, redirecting with code")
+        return f"""
+        <html>
+            <head><title>Jira Auth Success</title></head>
+            <body>
+                <script>
+                    console.log('✅ OAuth code received, redirecting...');
+                    window.location.href = '/auth/jira/success?code=' + encodeURIComponent('{code}');
+                </script>
+            </body>
+        </html>
+        """
+    
+    print("❌ Jira OAuth callback missing code and error")
+    raise HTTPException(status_code=400, detail="Missing authorization code or error")
+
+@app.get("/auth/jira/success", response_class=HTMLResponse)
+async def jira_auth_success(code: str = None, error: str = None):
+    """
+    Success page that the extension can detect
+    """
+    print(f"🎯 Jira auth success page accessed")
+    print(f"🔧 Code present: {'Yes' if code else 'No'}")
+    print(f"🔧 Error present: {'Yes' if error else 'No'}")
+    
+    if error:
+        print(f"❌ Auth success page with error: {error}")
+        return f"""
+        <html>
+            <head>
+                <title>Jira Authentication Error</title>
+                <style>
+                    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; 
+                           padding: 40px; text-align: center; background: #f5f5f5; }}
+                    .error {{ color: #d73a49; background: white; padding: 20px; border-radius: 8px; 
+                             box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
+                </style>
+            </head>
+            <body>
+                <div class="error">
+                    <h2>Authentication Failed</h2>
+                    <p>Error: {error}</p>
+                    <p>You can close this window and try again.</p>
+                </div>
+                <script>
+                    console.log('❌ Auth failed with error: {error}');
+                    
+                    // Send error message to parent window
+                    if (window.opener) {{
+                        window.opener.postMessage({{
+                            type: 'JIRA_AUTH_ERROR',
+                            error: '{error}'
+                        }}, '*');
+                        console.log('📨 Error message sent to parent window');
+                    }} else {{
+                        console.log('⚠️ No parent window found to send message to');
+                    }}
+                    
+                    // Close window after sending message
+                    setTimeout(() => {{ 
+                        window.close(); 
+                    }}, 2000);
+                </script>
+            </body>
+        </html>
+        """
+    
+    if code:
+        print(f"✅ Auth success page with code, sending message to parent window")
+        return f"""
+        <html>
+            <head>
+                <title>Jira Authentication Success</title>
+                <style>
+                    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; 
+                           padding: 40px; text-align: center; background: #f5f5f5; }}
+                    .success {{ color: #28a745; background: white; padding: 20px; border-radius: 8px; 
+                               box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
+                </style>
+            </head>
+            <body>
+                <div class="success">
+                    <h2>✅ Authentication Successful!</h2>
+                    <p>Jira authentication completed successfully.</p>
+                    <p>This window will close automatically...</p>
+                </div>
+                <script>
+                    console.log('✅ Auth successful, sending message to parent window...');
+                    
+                    // Send success message to parent window
+                    if (window.opener) {{
+                        window.opener.postMessage({{
+                            type: 'JIRA_AUTH_SUCCESS',
                             code: '{code}'
                         }}, '*');
                         console.log('📨 Success message sent to parent window');

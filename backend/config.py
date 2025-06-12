@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     SLACK_CLIENT_SECRET: str = ""
     SLACK_REDIRECT_URI: str = "https://designx-705035175306.us-central1.run.app/api/slack/callback"
 
+    # Jira OAuth settings
+    JIRA_CLIENT_ID: str = ""
+    JIRA_CLIENT_SECRET: str = ""
+    JIRA_REDIRECT_URI: str = "https://designx-705035175306.us-central1.run.app/api/jira/callback"
+
     class Config:
         env_file = ".env"
         case_sensitive = True

@@ -4,6 +4,7 @@ import { editModeManager } from './edit-mode'
 import { commentModeManager, type SelectedElement, CommentBubble } from './comment-mode'
 import { gitHubModeManager, type GitHubUser, GitHubBubble } from './integrations/github'
 import { slackModeManager, type SlackUser, type SlackMessage, SlackBubble } from './integrations/slack'
+import { jiraModeManager, type JiraUser, type JiraIssue, JiraBubble } from './integrations/jira'
 import type { Project } from './integrations/IntegrationManager'
 
 // Inline styles to ensure the component works even if Tailwind doesn't load
@@ -41,6 +42,11 @@ const FloatingIcon: React.FC = () => {
   const [slackUser, setSlackUser] = useState<SlackUser | null>(null)
   const [slackChannels, setSlackChannels] = useState<Project[]>([])
   
+  // Jira state
+  const [isJiraAuthenticated, setIsJiraAuthenticated] = useState(false)
+  const [jiraUser, setJiraUser] = useState<JiraUser | null>(null)
+  const [jiraProjects, setJiraProjects] = useState<Project[]>([])
+  
   const selectedIconRef = useRef<string | null>(null)
 
   // Keep ref in sync with state
@@ -55,6 +61,7 @@ const FloatingIcon: React.FC = () => {
         commentModeManager.deactivate()
         gitHubModeManager.deactivate()
         slackModeManager.deactivate()
+        jiraModeManager.deactivate()
         setSelectedIcon('edit')
         setSelectedElement(null) // Clear comment bubble
       } else if (selectedIconRef.current === 'edit') {
@@ -69,6 +76,7 @@ const FloatingIcon: React.FC = () => {
         editModeManager.deactivate()
         gitHubModeManager.deactivate()
         slackModeManager.deactivate()
+        jiraModeManager.deactivate()
         setSelectedIcon('comment')
       } else if (selectedIconRef.current === 'comment') {
         setSelectedIcon(null)
@@ -83,6 +91,7 @@ const FloatingIcon: React.FC = () => {
         editModeManager.deactivate()
         commentModeManager.deactivate()
         slackModeManager.deactivate()
+        jiraModeManager.deactivate()
         setSelectedIcon('github')
         setSelectedElement(null) // Clear comment bubble
       } else if (selectedIconRef.current === 'github') {
@@ -97,9 +106,25 @@ const FloatingIcon: React.FC = () => {
         editModeManager.deactivate()
         commentModeManager.deactivate()
         gitHubModeManager.deactivate()
+        jiraModeManager.deactivate()
         setSelectedIcon('slack')
         setSelectedElement(null) // Clear comment bubble
       } else if (selectedIconRef.current === 'slack') {
+        setSelectedIcon(null)
+      }
+    })
+
+    // Register callback to sync UI state with Jira mode state
+    jiraModeManager.onStateChange((isActive: boolean) => {
+      if (isActive) {
+        // Deactivate other modes if Jira mode is activated
+        editModeManager.deactivate()
+        commentModeManager.deactivate()
+        gitHubModeManager.deactivate()
+        slackModeManager.deactivate()
+        setSelectedIcon('jira')
+        setSelectedElement(null) // Clear comment bubble
+      } else if (selectedIconRef.current === 'jira') {
         setSelectedIcon(null)
       }
     })
@@ -131,15 +156,28 @@ const FloatingIcon: React.FC = () => {
       }
     })
 
+    // Register callback for Jira authentication state
+    jiraModeManager.onAuthStateChange((isAuthenticated: boolean, user?: JiraUser) => {
+      setIsJiraAuthenticated(isAuthenticated)
+      setJiraUser(user || null)
+      if (isAuthenticated) {
+        setJiraProjects(jiraModeManager.getProjects())
+      } else {
+        setJiraProjects([])
+      }
+    })
+
     // Check for existing authentication on load
     gitHubModeManager.checkExistingAuth()
     slackModeManager.checkExistingAuth()
+    jiraModeManager.checkExistingAuth()
 
     return () => {
       editModeManager.cleanup()
       commentModeManager.cleanup()
       gitHubModeManager.cleanup()
       slackModeManager.cleanup()
+      jiraModeManager.cleanup()
     }
   }, [])
 
@@ -241,6 +279,36 @@ const FloatingIcon: React.FC = () => {
     }))
   }
 
+  const handleJira = () => {
+    console.log('Jira feature activated!')
+    jiraModeManager.toggle()
+    // Note: selectedIcon state will be updated via the onStateChange callback
+  }
+
+  const handleJiraAuthenticate = async () => {
+    const success = await jiraModeManager.authenticate()
+    if (success) {
+      setJiraProjects(jiraModeManager.getProjects())
+    }
+  }
+
+  const handleJiraLogout = async () => {
+    await jiraModeManager.logout()
+  }
+
+  const handleJiraClose = () => {
+    jiraModeManager.deactivate()
+  }
+
+  const handleJiraProjectSelect = async (project: Project) => {
+    if (!project.id) {
+      console.error('Project ID is required for Jira operations')
+      return []
+    }
+    console.log('🎫 Jira project selected:', project.name)
+    return jiraModeManager.fetchIssues(String(project.id))
+  }
+
   return (
     <>
       <CommentBubble
@@ -270,9 +338,26 @@ const FloatingIcon: React.FC = () => {
         onLogout={handleSlackLogout}
         onSelectChannel={handleSlackChannelSelect}
       />
+
+      {selectedIcon === 'jira' && (
+        <div style={{
+          position: 'fixed',
+          bottom: '72px',
+          right: '20px',
+          zIndex: 10000
+        }}>
+          <JiraBubble 
+            selectedText=""
+            onClose={handleJiraClose}
+          />
+        </div>
+      )}
       
       <div 
-        style={styles.menuButton}
+        style={{
+          ...styles.menuButton,
+          width: '200px' // Increase width to accommodate Jira button
+        }}
         className="relative"
         data-floating-icon="true"
       >
@@ -318,6 +403,33 @@ const FloatingIcon: React.FC = () => {
               stroke: 'currentColor'
             }} 
           />
+        </button>
+
+        <button
+          onClick={handleJira}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: '4px'
+          }}
+        >
+          <svg 
+            width="18" 
+            height="18" 
+            viewBox="0 0 24 24" 
+            fill={selectedIcon === 'jira' ? 'currentColor' : 'none'}
+            stroke="currentColor"
+            strokeWidth="2.5"
+            style={{ 
+              color: 'white',
+              opacity: 0.9
+            }}
+          >
+            <path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 6.62 5.367 11.987 11.988 11.987s11.987-5.367 11.987-11.987C24.004 5.367 18.637.001 12.017.001zm-.008 21.347c-5.157 0-9.36-4.202-9.36-9.36 0-5.157 4.203-9.36 9.36-9.36s9.36 4.203 9.36 9.36c0 5.158-4.203 9.36-9.36 9.36z"/>
+            <path d="M12.017 4.422L8.78 7.659l3.237 3.237 3.237-3.237z" fill="#2684FF"/>
+            <path d="M12.017 12.776l3.237 3.237-3.237 3.237-3.237-3.237z"/>
+          </svg>
         </button>
         
         <button
