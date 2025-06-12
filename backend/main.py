@@ -761,6 +761,18 @@ async def run_sweagent(request: RunSWEAgentRequest):
         print(f"   OpenAI API key configured: {'Yes' if settings.OPENAI_API_KEY else 'No'}")
         print(f"   Modal token configured: {'Yes' if settings.MODAL_TOKEN_ID else 'No'}")
         
+        # Check if sweagent command exists
+        import shutil
+        sweagent_path = shutil.which("sweagent")
+        print(f"🔍 sweagent command found at: {sweagent_path}")
+        
+        if not sweagent_path:
+            print("❌ sweagent command not found in PATH")
+            return {
+                "status": "error",
+                "message": "sweagent command not found in PATH"
+            }
+        
         # Set up environment variables
         env = os.environ.copy()
         env.update({
@@ -782,24 +794,67 @@ async def run_sweagent(request: RunSWEAgentRequest):
         ]
         
         print(f"🚀 Executing command: {' '.join(cmd)}")
+        print(f"🔧 Environment variables set: GITHUB_TOKEN, OPENAI_API_KEY, MODAL_TOKEN_ID, MODAL_TOKEN_SECRET")
         
-        # Run the command in the background (non-blocking)
+        # First, let's try to run sweagent --help to see if it works
+        try:
+            help_result = subprocess.run(
+                ["sweagent", "--help"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            print(f"📋 sweagent --help exit code: {help_result.returncode}")
+            if help_result.stdout:
+                print(f"📋 sweagent --help stdout: {help_result.stdout[:500]}...")
+            if help_result.stderr:
+                print(f"⚠️ sweagent --help stderr: {help_result.stderr[:500]}...")
+        except Exception as e:
+            print(f"❌ Error running sweagent --help: {str(e)}")
+        
+        # Run the actual command with better monitoring
+        print("🚀 Starting SWE-agent process...")
         process = subprocess.Popen(
             cmd,
             env=env,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
+            stderr=subprocess.STDOUT,  # Combine stderr with stdout
+            text=True,
+            bufsize=1,  # Line buffered
+            universal_newlines=True
         )
         
         print(f"✅ SWE-agent process started with PID: {process.pid}")
+        
+        # Start a background task to monitor the process
+        import asyncio
+        import threading
+        
+        def monitor_process():
+            try:
+                # Read output in real-time
+                for line in iter(process.stdout.readline, ''):
+                    if line:
+                        print(f"📄 SWE-agent: {line.strip()}")
+                
+                # Wait for process to complete
+                return_code = process.wait()
+                print(f"🏁 SWE-agent process completed with return code: {return_code}")
+                
+            except Exception as e:
+                print(f"❌ Error monitoring SWE-agent process: {str(e)}")
+        
+        # Start monitoring in a separate thread
+        monitor_thread = threading.Thread(target=monitor_process, daemon=True)
+        monitor_thread.start()
         
         return {
             "status": "triggered", 
             "message": "SWE-agent started successfully",
             "repo_url": request.repo_url,
             "issue_url": request.issue_url,
-            "process_id": process.pid
+            "process_id": process.pid,
+            "sweagent_path": sweagent_path
         }
         
     except Exception as e:
