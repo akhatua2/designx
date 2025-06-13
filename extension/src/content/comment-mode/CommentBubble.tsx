@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Send, X, ChevronDown, Github, Slack } from 'lucide-react'
 import type { SelectedElement } from './CommentModeManager'
+import { ScreenshotCapture } from './ScreenshotCapture'
 import { gitHubModeManager } from '../integrations/github'
 import { slackModeManager } from '../integrations/slack'
 import { jiraModeManager } from '../integrations/jira'
@@ -123,6 +124,23 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
     try {
       if (selectedPlatform === 'github' && isGitHubRepo(selectedChannel)) {
         
+        // Automatically capture screenshot for GitHub issues
+        let screenshotUrl: string | null = null
+        try {
+          console.log('📸 Automatically capturing screenshot for GitHub issue...')
+          const result = await ScreenshotCapture.captureElement({
+            element: selectedElement!.element
+          })
+          if (result.success && result.imageUrl) {
+            screenshotUrl = result.imageUrl
+            console.log('✅ Screenshot captured:', screenshotUrl)
+          } else {
+            console.warn('⚠️ Screenshot capture failed:', result.error)
+          }
+        } catch (error) {
+          console.warn('⚠️ Failed to capture screenshot, continuing without it:', error)
+        }
+        
         // Create a more professional title
         const title = `UI Feedback: ${comment.trim().substring(0, 50)}${comment.trim().length > 50 ? '...' : ''}`
         
@@ -153,11 +171,20 @@ ${JSON.stringify(selectedElement!.reactInfo.hooks, null, 2)}
 \`\`\`` : ''}
 ` : ''
 
+        const screenshotSection = screenshotUrl ? `
+
+## Screenshot
+
+![Element Screenshot](${screenshotUrl})
+
+*Screenshot of the selected element automatically captured by DesignX*
+
+---` : ''
+
         const body = `## User Feedback
 
 ${comment.trim()}
-
----
+${screenshotSection}
 
 ### Technical Details
 <details>

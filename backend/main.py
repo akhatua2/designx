@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, WebSocket, Depends
+from fastapi import FastAPI, HTTPException, WebSocket, Depends, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, Response
 from config import settings
@@ -28,6 +28,7 @@ from sweagent_service import (
     sweagent_service, websocket_job_status
 )
 from auth_service import get_current_user, get_current_user_optional
+from screenshot_service import upload_screenshot_endpoint, delete_screenshot_endpoint
 
 # Configure logging for Cloud Run
 logging.basicConfig(
@@ -138,6 +139,17 @@ async def logout_user(current_user: dict = Depends(get_current_user)):
     """Logout current user"""
     # With JWT tokens, logout is handled client-side by removing the token
     return {"success": True, "message": "Logged out successfully"}
+
+# =================== Screenshot Upload Routes ===================
+@app.post("/api/upload/screenshot")
+async def upload_screenshot(image: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    """Upload a screenshot image"""
+    return await upload_screenshot_endpoint(image, current_user)
+
+@app.delete("/api/upload/screenshot/{filename:path}")
+async def delete_screenshot(filename: str, current_user: dict = Depends(get_current_user)):
+    """Delete a screenshot image"""
+    return await delete_screenshot_endpoint(filename, current_user)
 
 # =================== SWE-Agent Job Routes ===================
 @app.post("/api/run-sweagent", response_model=JobResponse)
