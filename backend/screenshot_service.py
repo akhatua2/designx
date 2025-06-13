@@ -274,8 +274,8 @@ async def delete_screenshot_endpoint(
     return await ScreenshotService.delete_screenshot(filename, current_user)
 
 async def create_screenshot_for_task_endpoint(
-    image: UploadFile = File(..., description="Screenshot image file"),
     task_id: str,
+    image: UploadFile = File(..., description="Screenshot image file"),
     current_user: dict = Depends(get_current_user)
 ):
     """Create a screenshot directly associated with a task"""
