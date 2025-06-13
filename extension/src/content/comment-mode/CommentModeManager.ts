@@ -50,12 +50,11 @@ export class CommentModeManager {
   private originalCursor = ''
   private onStateChangeCallback: ((isActive: boolean) => void) | null = null
   private onElementSelectedCallback: ((elementData: SelectedElement) => void) | null = null
+  private overlayElement: HTMLElement | null = null
+  private selectedElement: Element | null = null
 
   private readonly highlightStyles = {
-    outline: '2px solid #3b82f6',
-    outlineOffset: '2px',
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-    transition: 'all 0.2s ease'
+    // No styles applied to selected element - keep it completely clean
   }
 
   // Handle mouse move for highlighting elements
@@ -162,8 +161,15 @@ export class CommentModeManager {
   }
 
   private addHighlight(element: Element) {
+    // Remove existing overlay
+    this.removeOverlay()
+    
+    // Keep element completely clean - no styles applied
     const htmlElement = element as HTMLElement
     Object.assign(htmlElement.style, this.highlightStyles)
+    
+    // Create overlay that blurs everything except the highlighted element
+    this.createOverlay(element)
   }
 
   private removeHighlight(element: Element) {
@@ -171,6 +177,167 @@ export class CommentModeManager {
     Object.keys(this.highlightStyles).forEach(key => {
       htmlElement.style.removeProperty(key.replace(/([A-Z])/g, '-$1').toLowerCase())
     })
+    this.removeOverlay()
+  }
+
+  private createOverlay(selectedElement: Element) {
+    const rect = selectedElement.getBoundingClientRect()
+    
+    // Create main overlay container
+    this.overlayElement = document.createElement('div')
+    this.overlayElement.setAttribute('data-floating-icon', 'true') // Exclude from screenshots
+    this.overlayElement.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 10000;
+      pointer-events: none;
+      transition: all 0.2s ease;
+    `
+
+    // Create a rounded cutout area for the selected element
+    const padding = 8 // Add padding around the element for rounded effect
+    const borderRadius = 12 // Rounded corners
+    
+    // Create the blurred background that covers everything
+    const blurredBackground = document.createElement('div')
+    blurredBackground.style.cssText = `
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(2px);
+    `
+
+    // Create a mask using radial-gradient for smooth rounded corners
+    const centerX = rect.left + rect.width / 2
+    const centerY = rect.top + rect.height / 2
+    const maskWidth = rect.width + (padding * 2)
+    const maskHeight = rect.height + (padding * 2)
+    
+    // Use CSS mask with rounded rectangle cutout
+    const maskImage = `
+      radial-gradient(
+        ellipse ${maskWidth/2}px ${maskHeight/2}px at ${centerX}px ${centerY}px,
+        transparent ${Math.min(maskWidth, maskHeight)/2 - borderRadius}px,
+        transparent ${Math.min(maskWidth, maskHeight)/2}px,
+        black ${Math.min(maskWidth, maskHeight)/2 + 1}px
+      )
+    `
+    
+    // Fallback to a simpler approach using mask-image with rounded rectangle
+    blurredBackground.style.maskImage = `
+      linear-gradient(black, black),
+      radial-gradient(
+        ${borderRadius}px at ${rect.left - padding + borderRadius}px ${rect.top - padding + borderRadius}px,
+        transparent ${borderRadius - 1}px,
+        black ${borderRadius}px
+      ),
+      radial-gradient(
+        ${borderRadius}px at ${rect.right + padding - borderRadius}px ${rect.top - padding + borderRadius}px,
+        transparent ${borderRadius - 1}px,
+        black ${borderRadius}px
+      ),
+      radial-gradient(
+        ${borderRadius}px at ${rect.right + padding - borderRadius}px ${rect.bottom + padding - borderRadius}px,
+        transparent ${borderRadius - 1}px,
+        black ${borderRadius}px
+      ),
+      radial-gradient(
+        ${borderRadius}px at ${rect.left - padding + borderRadius}px ${rect.bottom + padding - borderRadius}px,
+        transparent ${borderRadius - 1}px,
+        black ${borderRadius}px
+      )
+    `
+    
+    blurredBackground.style.maskComposite = 'subtract'
+    blurredBackground.style.webkitMaskComposite = 'source-out'
+    
+    // Simpler approach: use box-shadow with inset and border-radius on a pseudo-cutout
+    blurredBackground.style.maskImage = 'none'
+    
+    // Create cutout using box-shadow technique
+    const cutoutX = rect.left - padding
+    const cutoutY = rect.top - padding
+    const cutoutWidth = rect.width + (padding * 2)
+    const cutoutHeight = rect.height + (padding * 2)
+    
+    blurredBackground.style.boxShadow = `
+      0 0 0 ${cutoutY}px rgba(0, 0, 0, 0.3),
+      0 0 0 ${cutoutX}px rgba(0, 0, 0, 0.3),
+      ${cutoutWidth}px 0 0 ${cutoutX}px rgba(0, 0, 0, 0.3),
+      0 ${cutoutHeight}px 0 ${cutoutY}px rgba(0, 0, 0, 0.3)
+    `
+    
+    // Reset and use a clean approach with multiple divs
+    blurredBackground.style.boxShadow = 'none'
+    blurredBackground.style.background = 'none'
+    
+    // Top section
+    const topSection = document.createElement('div')
+    topSection.style.cssText = `
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: ${cutoutY}px;
+      background: rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(2px);
+    `
+    
+    // Bottom section  
+    const bottomSection = document.createElement('div')
+    bottomSection.style.cssText = `
+      position: absolute;
+      top: ${cutoutY + cutoutHeight}px;
+      left: 0;
+      width: 100%;
+      height: calc(100% - ${cutoutY + cutoutHeight}px);
+      background: rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(2px);
+    `
+    
+    // Left section
+    const leftSection = document.createElement('div')
+    leftSection.style.cssText = `
+      position: absolute;
+      top: ${cutoutY}px;
+      left: 0;
+      width: ${cutoutX}px;
+      height: ${cutoutHeight}px;
+      background: rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(2px);
+    `
+    
+    // Right section
+    const rightSection = document.createElement('div')
+    rightSection.style.cssText = `
+      position: absolute;
+      top: ${cutoutY}px;
+      left: ${cutoutX + cutoutWidth}px;
+      width: calc(100% - ${cutoutX + cutoutWidth}px);
+      height: ${cutoutHeight}px;
+      background: rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(2px);
+    `
+
+    this.overlayElement.appendChild(topSection)
+    this.overlayElement.appendChild(bottomSection)
+    this.overlayElement.appendChild(leftSection)
+    this.overlayElement.appendChild(rightSection)
+    
+    document.body.appendChild(this.overlayElement)
+  }
+
+  private removeOverlay() {
+    if (this.overlayElement) {
+      this.overlayElement.remove()
+      this.overlayElement = null
+    }
   }
 
   private cleanupHighlights() {
@@ -178,6 +345,7 @@ export class CommentModeManager {
       this.removeHighlight(this.hoveredElement)
       this.hoveredElement = null
     }
+    this.removeOverlay()
   }
 
   private notifyStateChange() {

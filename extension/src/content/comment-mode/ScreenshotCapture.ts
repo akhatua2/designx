@@ -1,5 +1,3 @@
-import html2canvas from 'html2canvas'
-
 export interface ScreenshotOptions {
   element: Element
   padding?: number
@@ -17,59 +15,73 @@ export class ScreenshotCapture {
   private static readonly API_BASE = 'https://designx-705035175306.us-central1.run.app'
 
   /**
-   * Capture a screenshot of the specified element
+   * Capture a screenshot of the specified element by taking full tab screenshot and cropping
    */
   static async captureElement(options: ScreenshotOptions): Promise<ScreenshotResult> {
     const { element, padding = 10, quality = 0.8, format = 'png' } = options
 
     try {
-      console.log('📸 Starting element screenshot capture...')
+      console.log('📸 Starting tab capture and crop...')
 
-      // Get element position and dimensions
+      // Scroll element into view and wait
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      // Get element position after scroll
       const rect = element.getBoundingClientRect()
-      const scrollTop = window.pageYOffset || document.documentElement.scrollTop
-      const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft
-
-      console.log('📐 Element dimensions:', {
+      const devicePixelRatio = window.devicePixelRatio || 1
+      
+      console.log('📐 Element position:', {
         width: rect.width,
         height: rect.height,
-        x: rect.x + scrollLeft,
-        y: rect.y + scrollTop
+        x: rect.x,
+        y: rect.y,
+        devicePixelRatio
       })
 
-      // Scroll element into view if needed
-      element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      
-      // Wait a bit for scroll to complete
-      await new Promise(resolve => setTimeout(resolve, 300))
+      // Hide UI elements before screenshot
+      this.hideUIElements()
 
-      // Capture the specific element with padding
-      const canvas = await html2canvas(element as HTMLElement, {
-        backgroundColor: null, // Transparent background
-        scale: 2, // Higher resolution
-        logging: false,
-        useCORS: true,
-        allowTaint: true,
-        width: rect.width + (padding * 2),
-        height: rect.height + (padding * 2),
-        x: -padding,
-        y: -padding,
-        scrollX: 0,
-        scrollY: 0
+      // Wait a bit for UI to hide
+      await new Promise(resolve => setTimeout(resolve, 100))
+
+      // Send message to background script to capture tab
+      const response = await new Promise<any>((resolve, reject) => {
+        chrome.runtime.sendMessage({
+          action: 'captureTab',
+          elementBounds: {
+            x: Math.max(0, rect.x - padding),
+            y: Math.max(0, rect.y - padding),
+            width: rect.width + (padding * 2),
+            height: rect.height + (padding * 2)
+          },
+          devicePixelRatio,
+          quality,
+          format
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message))
+          } else {
+            resolve(response)
+          }
+        })
       })
 
-      console.log('📸 Canvas created:', {
-        width: canvas.width,
-        height: canvas.height
-      })
+      // Show UI elements again
+      this.showUIElements()
 
-      // Convert canvas to blob
-      const blob = await new Promise<Blob | null>((resolve) => {
-        canvas.toBlob(resolve, `image/${format}`, quality)
-      })
+      if (!response.success) {
+        return { success: false, error: response.error || 'Failed to capture screenshot' }
+      }
+
+      console.log('📸 Screenshot captured and cropped by background script')
+
+      // Convert the cropped dataURL to blob
+      const dataUrl = response.dataUrl
+      const blob = await this.dataUrlToBlob(dataUrl)
 
       if (!blob) {
-        return { success: false, error: 'Failed to create image blob' }
+        return { success: false, error: 'Failed to convert screenshot to blob' }
       }
 
       console.log('📦 Blob created:', {
@@ -93,6 +105,39 @@ export class ScreenshotCapture {
         error: error instanceof Error ? error.message : 'Unknown error occurred' 
       }
     }
+  }
+
+  /**
+   * Convert data URL to blob
+   */
+  private static async dataUrlToBlob(dataUrl: string): Promise<Blob | null> {
+    try {
+      const response = await fetch(dataUrl)
+      return await response.blob()
+    } catch (error) {
+      console.error('Failed to convert data URL to blob:', error)
+      return null
+    }
+  }
+
+  /**
+   * Hide UI elements during screenshot
+   */
+  private static hideUIElements(): void {
+    const elementsToHide = document.querySelectorAll('[data-floating-icon="true"]')
+    elementsToHide.forEach(element => {
+      (element as HTMLElement).style.visibility = 'hidden'
+    })
+  }
+
+  /**
+   * Show UI elements after screenshot
+   */
+  private static showUIElements(): void {
+    const elementsToShow = document.querySelectorAll('[data-floating-icon="true"]')
+    elementsToShow.forEach(element => {
+      (element as HTMLElement).style.visibility = 'visible'
+    })
   }
 
   /**
