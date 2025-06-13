@@ -19,7 +19,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY SWE-agent/ /app/SWE-agent/
 RUN cd /app/SWE-agent \
     && python -m pip install --upgrade pip \
-    && pip install --editable .
+    && pip install --editable . \
+    && mkdir -p trajectories
 
 # Copy the rest of the application
 COPY . .
