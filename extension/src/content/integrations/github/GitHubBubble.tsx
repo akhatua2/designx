@@ -3,7 +3,6 @@ import { X, Star, Lock, Globe, GitPullRequest, ArrowLeft, CircleDot, Bot } from 
 import type { GitHubUser, GitHubIssue, GitHubRepo } from './GitHubModeManager'
 import type { Project } from '../IntegrationManager'
 import { sweAgentService, type SWEAgentJob } from '../sweagent/SWEAgentService'
-import { SWEAgentJobStatus } from '../sweagent/SWEAgentJobStatus'
 
 interface GitHubBubbleProps {
   isVisible: boolean
@@ -32,8 +31,7 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
   const [issues, setIssues] = useState<GitHubIssue[]>([])
   const [loading, setLoading] = useState(false)
   const [isRepoDropdownOpen, setIsRepoDropdownOpen] = useState(false)
-  const [activeJob, setActiveJob] = useState<SWEAgentJob | null>(null)
-  const [showJobStatus, setShowJobStatus] = useState(false)
+  const [activeJobs, setActiveJobs] = useState<Map<string, SWEAgentJob>>(new Map())
 
   // Type guard to check if a Project is a GitHubRepo
   const isGitHubRepo = (repo: Project): repo is GitHubRepo => {
@@ -76,10 +74,14 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
 
       console.log('✅ SWE-agent job started:', jobResponse.job_id)
       
-      // Get the job details and show status
+      // Get the job details and add to active jobs
       const job = await sweAgentService.getJobStatus(jobResponse.job_id)
-      setActiveJob(job)
-      setShowJobStatus(true)
+      setActiveJobs(prev => new Map(prev.set(issue.url, job)))
+      
+      // Set up monitoring for this specific job
+      sweAgentService.monitorJob(jobResponse.job_id, (updatedJob) => {
+        setActiveJobs(prev => new Map(prev.set(issue.url, updatedJob)))
+      })
 
     } catch (error) {
       console.error('❌ Error starting SWE-agent:', error)
@@ -87,15 +89,7 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
     }
   }
 
-  const handleJobComplete = (job: SWEAgentJob) => {
-    console.log('🏁 SWE-agent job completed:', job)
-    if (job.status === 'completed') {
-      // Optionally refresh issues or show success message
-      alert('🎉 SWE-agent has completed the task! Check your repository for the pull request.')
-    } else if (job.status === 'failed') {
-      alert('❌ SWE-agent job failed. Please check the logs for details.')
-    }
-  }
+
 
   if (!isVisible) return null
 
@@ -405,68 +399,168 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
                   No open issues
                 </div>
               ) : (
-                issues.map((issue) => (
-                  <div
-                    key={issue.number}
-                    className="github-issue-item"
-                    style={prItemStyles}
-                  >
-                    <div 
-                      style={prTitleStyles}
-                      onClick={() => window.open(issue.url, '_blank')}
+                issues.map((issue) => {
+                  const activeJob = activeJobs.get(issue.url)
+                  const isJobRunning = activeJob && (activeJob.status === 'pending' || activeJob.status === 'running')
+                  
+                  return (
+                    <div
+                      key={issue.number}
+                      className="github-issue-item"
+                      style={prItemStyles}
                     >
-                      #{issue.number} {issue.title}
-                    </div>
-                    <div style={prMetaStyles}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <img 
-                          src={issue.user.avatar_url} 
-                          alt={issue.user.login}
-                          style={{
-                            width: '12px',
-                            height: '12px',
-                            borderRadius: '50%'
-                          }}
-                        />
-                        {issue.user.login}
-                      </div>
-                      <div>
-                        {new Date(issue.created_at).toLocaleDateString()}
-                      </div>
-                    </div>
-                    <div style={{ 
-                      marginTop: '6px', 
-                      display: 'flex', 
-                      gap: '4px',
-                      alignItems: 'center'
-                    }}>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleFixWithSWEAgent(issue)
-                        }}
-                        style={{
-                          fontSize: '9px',
-                          padding: '4px 8px',
-                          borderRadius: '4px',
-                          backgroundColor: '#7c3aed',
-                          border: 'none',
-                          color: 'white',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          transition: 'background-color 0.2s ease'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#6d28d9'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#7c3aed'}
+                      <div 
+                        style={prTitleStyles}
+                        onClick={() => window.open(issue.url, '_blank')}
                       >
-                        <Bot size={10} />
-                        Fix with SWE-agent
-                      </button>
+                        #{issue.number} {issue.title}
+                      </div>
+                      <div style={prMetaStyles}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <img 
+                            src={issue.user.avatar_url} 
+                            alt={issue.user.login}
+                            style={{
+                              width: '12px',
+                              height: '12px',
+                              borderRadius: '50%'
+                            }}
+                          />
+                          {issue.user.login}
+                        </div>
+                        <div>
+                          {new Date(issue.created_at).toLocaleDateString()}
+                        </div>
+                      </div>
+                      
+                      {/* SWE-agent Status - Inline */}
+                      {activeJob ? (
+                        <div style={{
+                          marginTop: '6px',
+                          padding: '6px 8px',
+                          borderRadius: '6px',
+                          backgroundColor: activeJob.status === 'completed' ? 'rgba(34, 197, 94, 0.1)' :
+                                         activeJob.status === 'failed' ? 'rgba(239, 68, 68, 0.1)' :
+                                         'rgba(59, 130, 246, 0.1)',
+                          border: `1px solid ${activeJob.status === 'completed' ? 'rgba(34, 197, 94, 0.2)' :
+                                              activeJob.status === 'failed' ? 'rgba(239, 68, 68, 0.2)' :
+                                              'rgba(59, 130, 246, 0.2)'}`
+                        }}>
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            marginBottom: '4px'
+                          }}>
+                            <span style={{ fontSize: '12px' }}>
+                              {activeJob.status === 'pending' ? '⏳' :
+                               activeJob.status === 'running' ? '🔄' :
+                               activeJob.status === 'completed' ? '✅' : '❌'}
+                            </span>
+                            <span style={{
+                              fontSize: '9px',
+                              fontWeight: '500',
+                              color: activeJob.status === 'completed' ? '#059669' :
+                                     activeJob.status === 'failed' ? '#dc2626' : '#2563eb'
+                            }}>
+                              SWE-agent {activeJob.status}
+                            </span>
+                          </div>
+                          
+                          {/* Progress bar for running jobs */}
+                          {isJobRunning && (
+                            <div style={{
+                              width: '100%',
+                              height: '2px',
+                              backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                              borderRadius: '1px',
+                              overflow: 'hidden',
+                              marginBottom: '4px'
+                            }}>
+                              <div style={{
+                                width: '60%',
+                                height: '100%',
+                                backgroundColor: '#3b82f6',
+                                borderRadius: '1px',
+                                animation: 'pulse 2s infinite'
+                              }} />
+                            </div>
+                          )}
+                          
+                          {/* Latest log or result */}
+                          {activeJob.progress_logs && activeJob.progress_logs.length > 0 && isJobRunning && (
+                            <div style={{
+                              fontSize: '8px',
+                              color: 'rgba(255, 255, 255, 0.7)',
+                              fontFamily: 'monospace',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis'
+                            }}>
+                              {activeJob.progress_logs[activeJob.progress_logs.length - 1]}
+                            </div>
+                          )}
+                          
+                          {/* Success message */}
+                          {activeJob.status === 'completed' && (
+                            <div style={{
+                              fontSize: '8px',
+                              color: '#059669',
+                              fontWeight: '500'
+                            }}>
+                              Pull request created! 🎉
+                            </div>
+                          )}
+                          
+                          {/* Error message */}
+                          {activeJob.status === 'failed' && activeJob.error_message && (
+                            <div style={{
+                              fontSize: '8px',
+                              color: '#dc2626',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis'
+                            }}>
+                              {activeJob.error_message}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div style={{ 
+                          marginTop: '6px', 
+                          display: 'flex', 
+                          gap: '4px',
+                          alignItems: 'center'
+                        }}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleFixWithSWEAgent(issue)
+                            }}
+                            style={{
+                              fontSize: '9px',
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              backgroundColor: '#7c3aed',
+                              border: 'none',
+                              color: 'white',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              transition: 'background-color 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#6d28d9'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#7c3aed'}
+                          >
+                            <Bot size={10} />
+                            Fix with SWE-agent
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))
+                  )
+                })
               )}
             </>
           ) : (
@@ -531,30 +625,7 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
         </div>
       </div>
       
-      {/* SWE-agent Job Status Modal */}
-      {showJobStatus && activeJob && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 10001
-        }}>
-          <SWEAgentJobStatus
-            jobId={activeJob.job_id}
-            onClose={() => {
-              setShowJobStatus(false)
-              setActiveJob(null)
-            }}
-            onJobComplete={handleJobComplete}
-          />
-        </div>
-      )}
+
     </>
   )
 }
