@@ -819,6 +819,8 @@ async def run_sweagent(request: RunSWEAgentRequest):
         # Run the command from SWE-agent root directory  
         import subprocess
         import time
+        import asyncio
+        import threading
         
         logger.info("🚀 Starting SWE-agent...")
         process = subprocess.Popen(
@@ -826,24 +828,54 @@ async def run_sweagent(request: RunSWEAgentRequest):
             cwd=swe_agent_path,  # This is critical - run from SWE-agent root
             env=env,  # Use our custom environment with all the tokens
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
+            stderr=subprocess.STDOUT,  # Merge stderr into stdout
+            text=True,
+            bufsize=1,  # Line buffered
+            universal_newlines=True
         )
         
-        # Wait and check if it's actually running
-        time.sleep(10)
+        # Start background thread to stream output to logs
+        def stream_output():
+            try:
+                while True:
+                    line = process.stdout.readline()
+                    if not line:
+                        if process.poll() is not None:
+                            break
+                        time.sleep(0.1)
+                        continue
+                    
+                    # Log each line from SWE-agent with a prefix
+                    line = line.strip()
+                    if line:
+                        logger.info(f"🤖 SWE-agent: {line}")
+                
+                # Log final status
+                process.wait()
+                if process.returncode == 0:
+                    logger.info(f"✅ SWE-agent completed successfully (exit code: {process.returncode})")
+                else:
+                    logger.error(f"❌ SWE-agent failed (exit code: {process.returncode})")
+                    
+            except Exception as e:
+                logger.error(f"❌ Error streaming SWE-agent output: {e}")
+        
+        # Start the streaming thread
+        stream_thread = threading.Thread(target=stream_output, daemon=True)
+        stream_thread.start()
+        
+        # Wait a moment to check if it starts properly
+        time.sleep(5)
         
         if process.poll() is not None:
             # Process has already terminated
-            stdout, stderr = process.communicate()
-            logger.error(f"❌ SWE-agent terminated after startup (exit code: {process.returncode})")
-            logger.error(f"STDOUT: {stdout[:1000]}")  
-            logger.error(f"STDERR: {stderr[:1000]}")  
-            return {"status": "error", "message": f"SWE-agent terminated (exit code {process.returncode}): {stderr[:300]}"}
+            logger.error(f"❌ SWE-agent terminated early (exit code: {process.returncode})")
+            return {"status": "error", "message": f"SWE-agent terminated early (exit code {process.returncode})"}
         
-        # Process is still running after 10 seconds, it's probably working
+        # Process is still running after 5 seconds, it's probably working
         logger.info(f"✅ SWE-agent confirmed running with PID: {process.pid}")
-        return {"status": "started", "message": f"SWE-agent started successfully with PID {process.pid}", "pid": process.pid}
+        logger.info(f"📡 Streaming output to logs - check Cloud Run logs for real-time progress")
+        return {"status": "started", "message": f"SWE-agent started successfully with PID {process.pid} - streaming to logs", "pid": process.pid}
         
         # Note: Commented out the wait logic since SWE-agent runs for a long time
         # result = process.communicate(timeout=3600)
