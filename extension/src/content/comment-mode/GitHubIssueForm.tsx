@@ -264,7 +264,7 @@ ${reactSection}
 
   const figmaInputStyles = {
     padding: '4px 8px',
-    border: '1px solid rgba(255, 255, 255, 0.12)',
+    border: 'none',
     borderRadius: '6px',
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     color: 'rgba(255, 255, 255, 0.9)',
@@ -272,7 +272,7 @@ ${reactSection}
     fontFamily: 'system-ui, -apple-system, sans-serif',
     outline: 'none',
     flex: 1,
-    transition: 'border-color 0.2s ease'
+    transition: 'background-color 0.2s ease'
   }
 
   const textareaStyles = {
@@ -374,7 +374,7 @@ ${reactSection}
             background-color: rgba(255, 255, 255, 0.08);
           }
           .github-figma-input:focus {
-            border-color: rgba(255, 255, 255, 0.3);
+            background-color: rgba(255, 255, 255, 0.08);
           }
           .github-figma-input::placeholder {
             color: rgba(255, 255, 255, 0.3);
@@ -390,7 +390,7 @@ ${reactSection}
       
       <div style={fieldContainerStyles}>
         <div style={rowStyles}>
-          <span style={labelStyles}>Priority</span>
+          <span style={labelStyles}>PRIORITY</span>
           <div style={priorityContainerStyles} ref={priorityDropdownRef}>
             <span
               style={priorityTagStyles}
@@ -426,7 +426,7 @@ ${reactSection}
         </div>
         
         <div style={rowStyles}>
-          <span style={labelStyles}>Figma Link</span>
+          <span style={labelStyles}>FIGMA</span>
           <input
             type="text"
             value={figmaLink}
