@@ -27,8 +27,7 @@ const JiraIssueForm: React.FC<JiraIssueFormProps> = ({
   comment,
   onCommentChange,
   onSubmit,
-  onKeyDown,
-  onScreenshotUploaded
+  onKeyDown
 }) => {
   const [selectedProject, setSelectedProject] = useState<JiraProject | null>(null)
   const [projects, setProjects] = useState<JiraProject[]>([])

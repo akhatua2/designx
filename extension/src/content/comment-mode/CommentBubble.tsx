@@ -51,7 +51,7 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
     
     if (token) {
       try {
-        const response = await fetch('http://localhost:8000/api/tasks', {
+        const response = await fetch('https://designx-705035175306.us-central1.run.app/api/tasks', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,

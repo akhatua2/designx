@@ -62,7 +62,7 @@ const UserBubble: React.FC<UserBubbleProps> = ({
         throw new Error('No authentication token found')
       }
 
-      const response = await fetch('http://localhost:8000/api/tasks', {
+      const response = await fetch('https://designx-705035175306.us-central1.run.app/api/tasks', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -91,7 +91,7 @@ const UserBubble: React.FC<UserBubbleProps> = ({
         throw new Error('No authentication token found')
       }
 
-      const response = await fetch(`http://localhost:8000/api/tasks/${taskId}`, {
+      const response = await fetch(`https://designx-705035175306.us-central1.run.app/api/tasks/${taskId}`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,

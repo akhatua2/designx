@@ -18,8 +18,7 @@ const SlackMessageForm: React.FC<SlackMessageFormProps> = ({
   comment,
   onCommentChange,
   onSubmit,
-  onKeyDown,
-  onScreenshotUploaded
+  onKeyDown
 }) => {
   const [selectedChannel, setSelectedChannel] = useState<SlackChannel | null>(null)
   const [channels, setChannels] = useState<SlackChannel[]>([])
