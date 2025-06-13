@@ -819,9 +819,12 @@ async def run_sweagent(request: RunSWEAgentRequest):
             # Create agent config
             agent_config = DefaultAgentConfig(model=model_config)
             
+            # Create repository config
+            from sweagent.environment.repo import GithubRepoConfig
+            repo_config = GithubRepoConfig(github_url=request.repo_url)
+            
             # Create environment config
-            env_config = EnvironmentConfig()
-            env_config.repo.github_url = request.repo_url
+            env_config = EnvironmentConfig(repo=repo_config)
             # Configure for Modal deployment
             env_config.deployment.type = "modal"
             
