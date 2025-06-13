@@ -11,6 +11,7 @@ interface GitHubIssueFormProps {
   onCommentChange: (comment: string) => void
   onSubmit: (comment: string) => void
   onKeyDown: (e: React.KeyboardEvent) => void
+  onScreenshotUploaded: (screenshotUrl: string) => void
 }
 
 const GitHubIssueForm: React.FC<GitHubIssueFormProps> = ({
@@ -18,7 +19,8 @@ const GitHubIssueForm: React.FC<GitHubIssueFormProps> = ({
   comment,
   onCommentChange,
   onSubmit,
-  onKeyDown
+  onKeyDown,
+  onScreenshotUploaded
 }) => {
   const [selectedRepo, setSelectedRepo] = useState<GitHubRepo | null>(null)
   const [repos, setRepos] = useState<GitHubRepo[]>([])
@@ -96,6 +98,8 @@ const GitHubIssueForm: React.FC<GitHubIssueFormProps> = ({
         if (result.success && result.imageUrl) {
           screenshotUrl = result.imageUrl
           console.log('✅ Screenshot captured:', screenshotUrl)
+          // Track this screenshot for task linking
+          onScreenshotUploaded(screenshotUrl)
         } else {
           console.warn('⚠️ Screenshot capture failed:', result.error)
         }

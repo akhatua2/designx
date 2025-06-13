@@ -10,6 +10,7 @@ interface JiraIssueFormProps {
   onCommentChange: (comment: string) => void
   onSubmit: (comment: string) => void
   onKeyDown: (e: React.KeyboardEvent) => void
+  onScreenshotUploaded: (screenshotUrl: string) => void
 }
 
 // Simple Jira icon component (inline SVG)
@@ -26,7 +27,8 @@ const JiraIssueForm: React.FC<JiraIssueFormProps> = ({
   comment,
   onCommentChange,
   onSubmit,
-  onKeyDown
+  onKeyDown,
+  onScreenshotUploaded
 }) => {
   const [selectedProject, setSelectedProject] = useState<JiraProject | null>(null)
   const [projects, setProjects] = useState<JiraProject[]>([])

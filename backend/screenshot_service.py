@@ -185,6 +185,79 @@ class ScreenshotService:
                 detail=f"Internal server error: {str(e)}"
             )
 
+    @staticmethod
+    async def create_screenshot_for_task(image: UploadFile, task_id: str, current_user: dict):
+        """Create a screenshot directly associated with a task"""
+        from config import get_supabase_client
+        import uuid
+        
+        supabase = get_supabase_client()
+        
+        # Verify task belongs to current user
+        task_result = supabase.table("tasks").select("id").eq("id", task_id).eq("user_id", current_user["id"]).execute()
+        if not task_result.data:
+            raise HTTPException(status_code=404, detail="Task not found")
+        
+        # Generate unique filename
+        file_extension = image.filename.split('.')[-1] if '.' in image.filename else 'png'
+        unique_filename = f"{uuid.uuid4()}.{file_extension}"
+        
+        try:
+            # Read file content
+            content = await image.read()
+            
+            # Upload to Supabase Storage
+            storage_path = f"screenshots/{current_user['id']}/{unique_filename}"
+            
+            upload_result = supabase.storage.from_("screenshots").upload(
+                path=storage_path,
+                file=content,
+                file_options={
+                    "content-type": image.content_type or "image/png",
+                    "upsert": False
+                }
+            )
+            
+            if upload_result.error:
+                raise Exception(f"Storage upload failed: {upload_result.error}")
+            
+            # Get public URL
+            public_url_result = supabase.storage.from_("screenshots").get_public_url(storage_path)
+            public_url = public_url_result['public_url'] if 'public_url' in public_url_result else public_url_result
+            
+            # Save screenshot record to database with task association
+            screenshot_data = {
+                "tasks_id": task_id,
+                "user_id": current_user["id"],
+                "filename": unique_filename,
+                "file_path": storage_path,
+                "file_size": len(content),
+                "content_type": image.content_type or "image/png",
+                "upload_url": public_url
+            }
+            
+            db_result = supabase.table("screenshots").insert(screenshot_data).execute()
+            
+            if db_result.error or not db_result.data:
+                # Cleanup storage if database insert failed
+                supabase.storage.from_("screenshots").remove([storage_path])
+                raise Exception(f"Database insert failed: {db_result.error}")
+            
+            return {
+                "id": db_result.data[0]["id"],
+                "filename": unique_filename,
+                "upload_url": public_url,
+                "file_size": len(content),
+                "content_type": image.content_type or "image/png",
+                "created_at": db_result.data[0]["created_at"]
+            }
+            
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error creating screenshot for task {task_id}: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to upload screenshot: {str(e)}")
+
 # FastAPI endpoint handlers
 async def upload_screenshot_endpoint(
     image: UploadFile = File(..., description="Screenshot image file"),
@@ -198,4 +271,12 @@ async def delete_screenshot_endpoint(
     current_user: dict = Depends(get_current_user)
 ):
     """Delete a screenshot image"""
-    return await ScreenshotService.delete_screenshot(filename, current_user) 
+    return await ScreenshotService.delete_screenshot(filename, current_user)
+
+async def create_screenshot_for_task_endpoint(
+    image: UploadFile = File(..., description="Screenshot image file"),
+    task_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a screenshot directly associated with a task"""
+    return await ScreenshotService.create_screenshot_for_task(image, task_id, current_user) 

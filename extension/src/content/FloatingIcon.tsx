@@ -7,6 +7,7 @@ import { slackModeManager, type SlackUser, type SlackMessage, SlackBubble } from
 import { jiraModeManager, type JiraUser, type JiraIssue, JiraBubble } from './integrations/jira'
 import { googleAuthManager, type GoogleUser } from './integrations/google/GoogleAuthManager'
 import type { Project } from './integrations/IntegrationManager'
+import UserBubble from './UserBubble'
 
 // Inline styles to ensure the component works exactly as before
 const styles = {
@@ -100,6 +101,7 @@ const FloatingIcon: React.FC = () => {
   const [selectedIcon, setSelectedIcon] = useState<string | null>(null)
   const [selectedElement, setSelectedElement] = useState<SelectedElement | null>(null)
   const [isHovered, setIsHovered] = useState(false)
+  const [showUserBubble, setShowUserBubble] = useState(false)
   
   // Google Auth state
   const [isGoogleAuthenticated, setIsGoogleAuthenticated] = useState(false)
@@ -128,11 +130,8 @@ const FloatingIcon: React.FC = () => {
 
   const handleGoogleAuth = async () => {
     if (isGoogleAuthenticated) {
-      // If already authenticated, show user menu or logout
-      const shouldLogout = confirm(`Logged in as ${googleUser?.email}\n\nDo you want to logout?`)
-      if (shouldLogout) {
-        await googleAuthManager.logout()
-      }
+      // If already authenticated, show user bubble
+      setShowUserBubble(true)
       return
     }
 
@@ -314,18 +313,7 @@ const FloatingIcon: React.FC = () => {
     // Note: selectedIcon state will be updated via the onStateChange callback
   }
 
-  const handleCommentSubmit = (comment: string) => {
-    if (!selectedElement) return
-    
-    console.log('💬 Comment submitted:')
-    console.log('Element:', selectedElement.elementInfo)
-    console.log('DOM Path:', selectedElement.domPath)
-    console.log('Comment:', comment)
-    console.log('---')
-    
-    // Here you would typically send the comment to your backend
-    // For now, we'll just log it
-  }
+
 
   const handleCommentClose = () => {
     setSelectedElement(null)
@@ -418,12 +406,15 @@ const FloatingIcon: React.FC = () => {
     return jiraModeManager.fetchIssues(String(project.id))
   }
 
+  const handleUserBubbleClose = () => {
+    setShowUserBubble(false)
+  }
+
   return (
     <>
       <CommentBubble
         selectedElement={selectedElement}
         onClose={handleCommentClose}
-        onSubmit={handleCommentSubmit}
       />
       
       <GitHubBubble
@@ -462,6 +453,12 @@ const FloatingIcon: React.FC = () => {
           />
         </div>
       )}
+
+      <UserBubble
+        isVisible={showUserBubble}
+        user={googleUser}
+        onClose={handleUserBubbleClose}
+      />
       
       <div 
         style={{

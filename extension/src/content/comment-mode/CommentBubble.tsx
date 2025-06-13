@@ -8,26 +8,84 @@ import JiraIssueForm from './JiraIssueForm'
 interface CommentBubbleProps {
   selectedElement: SelectedElement | null
   onClose: () => void
-  onSubmit: (comment: string) => void
 }
 
 type Platform = 'github' | 'slack' | 'jira'
 
 const CommentBubble: React.FC<CommentBubbleProps> = ({ 
   selectedElement, 
-  onClose, 
-  onSubmit 
+  onClose
 }) => {
   const [comment, setComment] = useState('')
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>('github')
+  const [uploadedScreenshots, setUploadedScreenshots] = useState<string[]>([])
 
-  // Clear comment when element changes
+  // Clear comment and screenshots when element changes
   useEffect(() => {
     setComment('')
+    setUploadedScreenshots([])
   }, [selectedElement])
 
+  const handleScreenshotUploaded = (screenshotUrl: string) => {
+    setUploadedScreenshots(prev => [...prev, screenshotUrl])
+    console.log('📸 Screenshot uploaded and tracked:', screenshotUrl)
+  }
+
+  const handleCommentSubmit = async (submittedComment: string, platform: string) => {
+    if (!selectedElement) return
+    
+    console.log('💬 Comment submitted:')
+    console.log('Element:', selectedElement.elementInfo)
+    console.log('DOM Path:', selectedElement.domPath)
+    console.log('Comment:', submittedComment)
+    console.log('Platform:', platform)
+    console.log('Screenshots to link:', uploadedScreenshots.length)
+    if (uploadedScreenshots.length > 0) {
+      console.log('Screenshot URLs:', uploadedScreenshots)
+    }
+    console.log('---')
+    
+    // Save task to database if user is authenticated
+    // Get stored auth token (adjust based on your auth implementation)
+    const token = localStorage.getItem('google_token') || sessionStorage.getItem('google_token')
+    
+    if (token) {
+      try {
+        const response = await fetch('http://localhost:8000/api/tasks', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+                     body: JSON.stringify({
+             comment_text: submittedComment,
+             platform: platform,
+             priority: 'medium',
+             element_info: selectedElement.elementInfo,
+             dom_path: selectedElement.domPath,
+             page_url: window.location.href,
+             screenshot_urls: uploadedScreenshots,
+             metadata: {
+               timestamp: new Date().toISOString(),
+               user_agent: navigator.userAgent
+             }
+           })
+        })
+
+        if (response.ok) {
+          const task = await response.json()
+          console.log('✅ Task saved to database:', task)
+        } else {
+          console.error('❌ Failed to save task to database:', response.statusText)
+        }
+      } catch (error) {
+        console.error('❌ Error saving task:', error)
+      }
+    }
+  }
+
   const handleFormSubmit = (submittedComment: string) => {
-    onSubmit(submittedComment)
+    handleCommentSubmit(submittedComment, selectedPlatform)
     setComment('')
     onClose()
   }
@@ -157,14 +215,29 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
               Jira
             </button>
           </div>
-          <button
-            onClick={onClose}
-            style={closeButtonStyles}
-            onMouseEnter={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)'}
-            onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)'}
-          >
-            <X size={12} />
-          </button>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {uploadedScreenshots.length > 0 && (
+              <div style={{
+                fontSize: '9px',
+                color: 'rgba(255, 255, 255, 0.6)',
+                padding: '2px 6px',
+                borderRadius: '4px',
+                backgroundColor: 'rgba(34, 197, 94, 0.2)',
+                border: '1px solid rgba(34, 197, 94, 0.3)'
+              }}>
+                📸 {uploadedScreenshots.length} screenshot{uploadedScreenshots.length > 1 ? 's' : ''}
+              </div>
+            )}
+            <button
+              onClick={onClose}
+              style={closeButtonStyles}
+              onMouseEnter={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)'}
+              onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)'}
+            >
+              <X size={12} />
+            </button>
+          </div>
         </div>
         
         {selectedPlatform === 'github' && (
@@ -174,6 +247,7 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
             onCommentChange={setComment}
             onSubmit={handleFormSubmit}
             onKeyDown={handleKeyDown}
+            onScreenshotUploaded={handleScreenshotUploaded}
           />
         )}
         
@@ -184,6 +258,7 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
             onCommentChange={setComment}
             onSubmit={handleFormSubmit}
             onKeyDown={handleKeyDown}
+            onScreenshotUploaded={handleScreenshotUploaded}
           />
         )}
         
@@ -194,6 +269,7 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
             onCommentChange={setComment}
             onSubmit={handleFormSubmit}
             onKeyDown={handleKeyDown}
+            onScreenshotUploaded={handleScreenshotUploaded}
           />
         )}
       </div>

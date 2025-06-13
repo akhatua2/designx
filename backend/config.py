@@ -65,4 +65,14 @@ class Settings(BaseSettings):
         case_sensitive = True
         extra = "ignore"  # Ignore extra fields instead of raising validation errors
 
-settings = Settings() 
+settings = Settings()
+
+def get_supabase_client():
+    """Get Supabase client instance"""
+    from supabase import create_client, Client
+    
+    if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_KEY:
+        raise ValueError("Supabase URL and Service Key must be configured")
+    
+    supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)
+    return supabase 

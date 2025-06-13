@@ -10,6 +10,7 @@ interface SlackMessageFormProps {
   onCommentChange: (comment: string) => void
   onSubmit: (comment: string) => void
   onKeyDown: (e: React.KeyboardEvent) => void
+  onScreenshotUploaded: (screenshotUrl: string) => void
 }
 
 const SlackMessageForm: React.FC<SlackMessageFormProps> = ({
@@ -17,7 +18,8 @@ const SlackMessageForm: React.FC<SlackMessageFormProps> = ({
   comment,
   onCommentChange,
   onSubmit,
-  onKeyDown
+  onKeyDown,
+  onScreenshotUploaded
 }) => {
   const [selectedChannel, setSelectedChannel] = useState<SlackChannel | null>(null)
   const [channels, setChannels] = useState<SlackChannel[]>([])

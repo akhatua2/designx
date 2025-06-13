@@ -4,6 +4,9 @@ from fastapi.responses import HTMLResponse, Response
 from config import settings
 import os
 import logging
+from typing import List, Optional
+from pydantic import BaseModel
+from datetime import datetime
 
 # Import integration modules
 from github_integration import (
@@ -29,6 +32,49 @@ from sweagent_service import (
 )
 from auth_service import get_current_user, get_current_user_optional
 from screenshot_service import upload_screenshot_endpoint, delete_screenshot_endpoint
+
+# Task models
+class CreateTaskRequest(BaseModel):
+    comment_text: str
+    platform: str  # 'github', 'slack', 'jira'
+    priority: Optional[str] = 'medium'
+    element_info: Optional[str] = None
+    dom_path: Optional[str] = None
+    page_url: Optional[str] = None
+    external_id: Optional[str] = None
+    external_url: Optional[str] = None
+    metadata: Optional[dict] = {}
+    screenshot_urls: Optional[List[str]] = []  # URLs of screenshots to associate
+
+class UpdateTaskRequest(BaseModel):
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    external_id: Optional[str] = None
+    external_url: Optional[str] = None
+
+class ScreenshotResponse(BaseModel):
+    id: str
+    filename: str
+    upload_url: str
+    file_size: Optional[int]
+    content_type: str
+    created_at: datetime
+
+class TaskResponse(BaseModel):
+    id: str
+    comment_text: str
+    platform: str
+    status: str
+    priority: str
+    element_info: Optional[str]
+    dom_path: Optional[str]
+    page_url: Optional[str]
+    external_id: Optional[str]
+    external_url: Optional[str]
+    metadata: dict
+    screenshots: Optional[List[ScreenshotResponse]] = []
+    created_at: datetime
+    updated_at: datetime
 
 # Configure logging for Cloud Run
 logging.basicConfig(
@@ -150,6 +196,177 @@ async def upload_screenshot(image: UploadFile = File(...), current_user: dict = 
 async def delete_screenshot(filename: str, current_user: dict = Depends(get_current_user)):
     """Delete a screenshot image"""
     return await delete_screenshot_endpoint(filename, current_user)
+
+@app.post("/api/tasks/{task_id}/screenshots", response_model=ScreenshotResponse)
+async def upload_task_screenshot(task_id: str, image: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    """Upload a screenshot for a specific task"""
+    from screenshot_service import create_screenshot_for_task_endpoint
+    
+    # Use the new service method that directly creates screenshots with task association
+    result = await create_screenshot_for_task_endpoint(image, task_id, current_user)
+    return ScreenshotResponse(**result)
+
+@app.get("/api/tasks/{task_id}/screenshots", response_model=List[ScreenshotResponse])
+async def get_task_screenshots(task_id: str, current_user: dict = Depends(get_current_user)):
+    """Get all screenshots for a specific task"""
+    from config import get_supabase_client
+    
+    supabase = get_supabase_client()
+    
+    # Verify task belongs to current user
+    task_result = supabase.table("tasks").select("id").eq("id", task_id).eq("user_id", current_user["id"]).execute()
+    if not task_result.data:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    try:
+        result = supabase.table("screenshots").select("*").eq("tasks_id", task_id).execute()
+        if result.data:
+            return [ScreenshotResponse(**screenshot) for screenshot in result.data]
+        else:
+            return []
+    except Exception as e:
+        logger.error(f"Error fetching task screenshots: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+# =================== Task Management Routes ===================
+@app.post("/api/tasks", response_model=TaskResponse)
+async def create_task(request: CreateTaskRequest, current_user: dict = Depends(get_current_user)):
+    """Create a new task/comment"""
+    from config import get_supabase_client
+    
+    supabase = get_supabase_client()
+    
+    # Insert task into database
+    task_data = {
+        "user_id": current_user["id"],
+        "comment_text": request.comment_text,
+        "platform": request.platform,
+        "priority": request.priority,
+        "element_info": request.element_info,
+        "dom_path": request.dom_path,
+        "page_url": request.page_url,
+        "external_id": request.external_id,
+        "external_url": request.external_url,
+        "metadata": request.metadata or {}
+    }
+    
+    try:
+        result = supabase.table("tasks").insert(task_data).execute()
+        if not result.data:
+            raise HTTPException(status_code=400, detail="Failed to create task")
+        
+        created_task = result.data[0]
+        task_id = created_task["id"]
+        
+        # Associate screenshots with the task if provided
+        if request.screenshot_urls:
+            try:
+                for screenshot_url in request.screenshot_urls:
+                    # Find screenshots by upload_url and update with tasks_id
+                    supabase.table("screenshots").update({"tasks_id": task_id}).eq("upload_url", screenshot_url).eq("user_id", current_user["id"]).execute()
+            except Exception as e:
+                logger.warning(f"Error associating screenshots with task {task_id}: {str(e)}")
+        
+        # Fetch the complete task with screenshots
+        complete_task = supabase.table("tasks").select("*").eq("id", task_id).execute()
+        screenshots_result = supabase.table("screenshots").select("*").eq("tasks_id", task_id).execute()
+        
+        task_data = complete_task.data[0]
+        task_data["screenshots"] = [ScreenshotResponse(**screenshot) for screenshot in screenshots_result.data] if screenshots_result.data else []
+        
+        return TaskResponse(**task_data)
+    except Exception as e:
+        logger.error(f"Error creating task: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/api/tasks", response_model=List[TaskResponse])
+async def get_user_tasks(current_user: dict = Depends(get_current_user)):
+    """Get all tasks for the current user"""
+    from config import get_supabase_client
+    
+    supabase = get_supabase_client()
+    
+    try:
+        # Get tasks
+        tasks_result = supabase.table("tasks").select("*").eq("user_id", current_user["id"]).order("created_at", desc=True).execute()
+        
+        if not tasks_result.data:
+            return []
+        
+        # Get screenshots for all tasks
+        task_ids = [task["id"] for task in tasks_result.data]
+        screenshots_result = supabase.table("screenshots").select("*").in_("tasks_id", task_ids).execute()
+        
+        # Group screenshots by tasks_id
+        screenshots_by_task = {}
+        if screenshots_result.data:
+            for screenshot in screenshots_result.data:
+                task_id = screenshot["tasks_id"]
+                if task_id not in screenshots_by_task:
+                    screenshots_by_task[task_id] = []
+                screenshots_by_task[task_id].append(ScreenshotResponse(**screenshot))
+        
+        # Build response with screenshots
+        tasks_with_screenshots = []
+        for task in tasks_result.data:
+            task_data = task.copy()
+            task_data["screenshots"] = screenshots_by_task.get(task["id"], [])
+            tasks_with_screenshots.append(TaskResponse(**task_data))
+        
+        return tasks_with_screenshots
+    except Exception as e:
+        logger.error(f"Error fetching tasks: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.patch("/api/tasks/{task_id}", response_model=TaskResponse)
+async def update_task(task_id: str, request: UpdateTaskRequest, current_user: dict = Depends(get_current_user)):
+    """Update a task's status or other fields"""
+    from config import get_supabase_client
+    
+    supabase = get_supabase_client()
+    
+    # Prepare update data
+    update_data = {}
+    if request.status is not None:
+        update_data["status"] = request.status
+    if request.priority is not None:
+        update_data["priority"] = request.priority
+    if request.external_id is not None:
+        update_data["external_id"] = request.external_id
+    if request.external_url is not None:
+        update_data["external_url"] = request.external_url
+    
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    
+    try:
+        # Verify task belongs to current user and update
+        result = supabase.table("tasks").update(update_data).eq("id", task_id).eq("user_id", current_user["id"]).execute()
+        if result.data:
+            return TaskResponse(**result.data[0])
+        else:
+            raise HTTPException(status_code=404, detail="Task not found")
+    except Exception as e:
+        logger.error(f"Error updating task: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.delete("/api/tasks/{task_id}")
+async def delete_task(task_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a task"""
+    from config import get_supabase_client
+    
+    supabase = get_supabase_client()
+    
+    try:
+        # Verify task belongs to current user and delete
+        result = supabase.table("tasks").delete().eq("id", task_id).eq("user_id", current_user["id"]).execute()
+        if result.data:
+            return {"success": True, "message": "Task deleted successfully"}
+        else:
+            raise HTTPException(status_code=404, detail="Task not found")
+    except Exception as e:
+        logger.error(f"Error deleting task: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 # =================== SWE-Agent Job Routes ===================
 @app.post("/api/run-sweagent", response_model=JobResponse)
