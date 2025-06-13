@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { MessageCircle, Edit3, Github, MessageSquare, Slack } from 'lucide-react'
+import { MessageCircle, Edit3, Github, MessageSquare, Slack, User } from 'lucide-react'
 import { editModeManager } from './edit-mode'
 import { commentModeManager, type SelectedElement, CommentBubble } from './comment-mode'
 import { gitHubModeManager, type GitHubUser, GitHubBubble } from './integrations/github'
 import { slackModeManager, type SlackUser, type SlackMessage, SlackBubble } from './integrations/slack'
 import { jiraModeManager, type JiraUser, type JiraIssue, JiraBubble } from './integrations/jira'
+import { googleAuthManager, type GoogleUser } from './integrations/google/GoogleAuthManager'
 import type { Project } from './integrations/IntegrationManager'
 
 // Inline styles to ensure the component works exactly as before
@@ -25,12 +26,45 @@ const styles = {
     boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.2)',
     transition: 'all 0.2s ease',
     pointerEvents: 'auto' as const
+  },
+  profileButton: {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    padding: '2px',
+    borderRadius: '50%',
+    width: '24px',
+    height: '24px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.2s ease'
+  },
+  profilePicture: {
+    width: '20px',
+    height: '20px',
+    borderRadius: '50%',
+    objectFit: 'cover' as const
+  },
+  profilePlaceholder: {
+    width: '20px',
+    height: '20px',
+    borderRadius: '50%',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
   }
 }
 
 const FloatingIcon: React.FC = () => {
   const [selectedIcon, setSelectedIcon] = useState<string | null>(null)
   const [selectedElement, setSelectedElement] = useState<SelectedElement | null>(null)
+  
+  // Google Auth state
+  const [isGoogleAuthenticated, setIsGoogleAuthenticated] = useState(false)
+  const [googleUser, setGoogleUser] = useState<GoogleUser | null>(null)
+  const [googleToken, setGoogleToken] = useState<string | null>(null)
   
   // GitHub state
   const [isGitHubAuthenticated, setIsGitHubAuthenticated] = useState(false)
@@ -51,6 +85,27 @@ const FloatingIcon: React.FC = () => {
 
   // Keep ref in sync with state
   selectedIconRef.current = selectedIcon
+
+  const handleGoogleAuth = async () => {
+    if (isGoogleAuthenticated) {
+      // If already authenticated, show user menu or logout
+      const shouldLogout = confirm(`Logged in as ${googleUser?.email}\n\nDo you want to logout?`)
+      if (shouldLogout) {
+        await googleAuthManager.logout()
+      }
+      return
+    }
+
+    const success = await googleAuthManager.authenticate()
+    if (!success) {
+      alert('Authentication failed. Please try again.')
+    }
+  }
+
+  // Function to get Google token for SWE-agent
+  const getGoogleToken = async () => {
+    return googleAuthManager.getToken()
+  }
 
   // Set up mode state synchronization and cleanup on unmount
   useEffect(() => {
@@ -167,10 +222,18 @@ const FloatingIcon: React.FC = () => {
       }
     })
 
+    // Register callback for Google authentication state
+    googleAuthManager.onAuthStateChange((isAuthenticated: boolean, user?: GoogleUser) => {
+      setIsGoogleAuthenticated(isAuthenticated)
+      setGoogleUser(user || null)
+      setGoogleToken(googleAuthManager.getToken())
+    })
+
     // Check for existing authentication on load
     gitHubModeManager.checkExistingAuth()
     slackModeManager.checkExistingAuth()
     jiraModeManager.checkExistingAuth()
+    googleAuthManager.checkExistingAuth()
 
     return () => {
       editModeManager.cleanup()
@@ -178,6 +241,7 @@ const FloatingIcon: React.FC = () => {
       gitHubModeManager.cleanup()
       slackModeManager.cleanup()
       jiraModeManager.cleanup()
+      googleAuthManager.cleanup()
     }
   }, [])
 
@@ -326,7 +390,7 @@ const FloatingIcon: React.FC = () => {
         onAuthenticate={handleGitHubAuthenticate}
         onLogout={handleGitHubLogout}
         onSelectRepo={handleGitHubRepoSelect}
-        onGetToken={() => gitHubModeManager.getToken()}
+        onGetToken={getGoogleToken}
       />
 
       <SlackBubble
@@ -357,11 +421,37 @@ const FloatingIcon: React.FC = () => {
       <div 
         style={{
           ...styles.menuButton,
-          width: '200px' // Increase width to accommodate Jira button
+          width: '240px' // Increase width to accommodate profile picture
         }}
         className="relative"
         data-floating-icon="true"
       >
+        {/* Profile Picture / Google Auth Button */}
+        <button
+          onClick={handleGoogleAuth}
+          style={styles.profileButton}
+          title={isGoogleAuthenticated ? `${googleUser?.name} (${googleUser?.email})` : 'Sign in with Google'}
+        >
+          {isGoogleAuthenticated && googleUser?.picture ? (
+            <img 
+              src={googleUser.picture} 
+              alt={googleUser.name}
+              style={styles.profilePicture}
+            />
+          ) : (
+            <div style={styles.profilePlaceholder}>
+              <User 
+                style={{ 
+                  width: '12px', 
+                  height: '12px', 
+                  color: 'white',
+                  opacity: 0.7
+                }} 
+              />
+            </div>
+          )}
+        </button>
+
         <button
           onClick={handleGitHub}
           style={{
