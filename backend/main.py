@@ -763,7 +763,7 @@ async def run_sweagent(request: RunSWEAgentRequest):
     try:
         # Import SWE-agent modules
         import sys
-        sys.path.insert(0, str(SWE_AGENT_PATH))
+        sys.path.insert(0, '/app/SWE-agent')
         
         from sweagent.run.run_single import RunSingleConfig
         from sweagent.run.common import BasicCLI
