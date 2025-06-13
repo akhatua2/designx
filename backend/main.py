@@ -821,12 +821,14 @@ async def run_sweagent(request: RunSWEAgentRequest):
             
             # Create repository config
             from sweagent.environment.repo import GithubRepoConfig
+            from swerex.deployment.config import ModalDeploymentConfig
             repo_config = GithubRepoConfig(github_url=request.repo_url)
             
+            # Create Modal deployment config
+            modal_deployment = ModalDeploymentConfig(image="python:3.11")
+            
             # Create environment config
-            env_config = EnvironmentConfig(repo=repo_config)
-            # Configure for Modal deployment
-            env_config.deployment.type = "modal"
+            env_config = EnvironmentConfig(repo=repo_config, deployment=modal_deployment)
             
             # Create problem statement config
             problem_statement_config = GithubIssue(github_url=request.issue_url)

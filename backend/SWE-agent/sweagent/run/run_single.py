@@ -56,7 +56,7 @@ class RunSingleActionConfig(BaseModel):
     """Run real-life actions (opening PRs, etc.) if we can solve the issue."""
 
     # Open a PR with the patch if we can solve the issue
-    open_pr: bool = False
+    open_pr: bool = True
     pr_config: OpenPRConfig = Field(default_factory=OpenPRConfig)
     # When working with local repository: Apply patch
     apply_patch_locally: bool = False
