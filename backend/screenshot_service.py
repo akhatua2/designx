@@ -10,8 +10,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Initialize Supabase client
-supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
+# Initialize Supabase client with service role for admin operations
+supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)
 
 class ScreenshotService:
     BUCKET_NAME = "screenshots"
@@ -119,8 +119,7 @@ class ScreenshotService:
                     "original_filename": file.filename,
                     "file_size": len(file_content),
                     "content_type": file.content_type,
-                    "public_url": public_url,
-                    "created_at": datetime.utcnow().isoformat()
+                    "public_url": public_url
                 }).execute()
                 
                 logger.info(f"📊 Upload logged to database: {upload_record.data[0]['id'] if upload_record.data else 'unknown'}")

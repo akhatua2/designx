@@ -1,3 +1,5 @@
+import html2canvas from 'html2canvas'
+
 export interface ScreenshotOptions {
   element: Element
   padding?: number
@@ -22,12 +24,6 @@ export class ScreenshotCapture {
 
     try {
       console.log('📸 Starting element screenshot capture...')
-
-      // Import html2canvas dynamically to avoid bundling issues
-      const html2canvas = await this.loadHtml2Canvas()
-      if (!html2canvas) {
-        return { success: false, error: 'Failed to load html2canvas library' }
-      }
 
       // Get element position and dimensions
       const rect = element.getBoundingClientRect()
@@ -96,39 +92,6 @@ export class ScreenshotCapture {
         success: false, 
         error: error instanceof Error ? error.message : 'Unknown error occurred' 
       }
-    }
-  }
-
-  /**
-   * Load html2canvas library dynamically
-   */
-  private static async loadHtml2Canvas(): Promise<any> {
-    try {
-      // Check if already loaded
-      if ((window as any).html2canvas) {
-        return (window as any).html2canvas
-      }
-
-      console.log('📦 Loading html2canvas library...')
-
-      // Create script element to load html2canvas
-      const script = document.createElement('script')
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'
-      script.async = true
-
-      // Wait for script to load
-      await new Promise<void>((resolve, reject) => {
-        script.onload = () => resolve()
-        script.onerror = () => reject(new Error('Failed to load html2canvas'))
-        document.head.appendChild(script)
-      })
-
-      console.log('✅ html2canvas loaded successfully')
-      return (window as any).html2canvas
-
-    } catch (error) {
-      console.error('❌ Failed to load html2canvas:', error)
-      return null
     }
   }
 
