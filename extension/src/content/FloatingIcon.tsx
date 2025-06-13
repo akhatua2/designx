@@ -326,6 +326,7 @@ const FloatingIcon: React.FC = () => {
         onAuthenticate={handleGitHubAuthenticate}
         onLogout={handleGitHubLogout}
         onSelectRepo={handleGitHubRepoSelect}
+        onGetToken={() => gitHubModeManager.getToken()}
       />
 
       <SlackBubble

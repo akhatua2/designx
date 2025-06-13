@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react'
-import { X, Star, Lock, Globe, GitPullRequest, ArrowLeft, CircleDot } from 'lucide-react'
+import { X, Star, Lock, Globe, GitPullRequest, ArrowLeft, CircleDot, Bot } from 'lucide-react'
 import type { GitHubUser, GitHubIssue, GitHubRepo } from './GitHubModeManager'
 import type { Project } from '../IntegrationManager'
+import { sweAgentService, type SWEAgentJob } from '../sweagent/SWEAgentService'
+import { SWEAgentJobStatus } from '../sweagent/SWEAgentJobStatus'
 
 interface GitHubBubbleProps {
   isVisible: boolean
@@ -12,6 +14,7 @@ interface GitHubBubbleProps {
   onAuthenticate: () => void
   onLogout: () => void
   onSelectRepo: (repo: Project) => Promise<GitHubIssue[]>
+  onGetToken: () => Promise<string | null>
 }
 
 const GitHubBubble: React.FC<GitHubBubbleProps> = ({ 
@@ -22,12 +25,15 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
   onClose,
   onAuthenticate,
   onLogout,
-  onSelectRepo
+  onSelectRepo,
+  onGetToken
 }) => {
   const [selectedRepo, setSelectedRepo] = useState<Project | null>(null)
   const [issues, setIssues] = useState<GitHubIssue[]>([])
   const [loading, setLoading] = useState(false)
   const [isRepoDropdownOpen, setIsRepoDropdownOpen] = useState(false)
+  const [activeJob, setActiveJob] = useState<SWEAgentJob | null>(null)
+  const [showJobStatus, setShowJobStatus] = useState(false)
 
   // Type guard to check if a Project is a GitHubRepo
   const isGitHubRepo = (repo: Project): repo is GitHubRepo => {
@@ -45,6 +51,50 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
   const handleBackClick = () => {
     setSelectedRepo(null)
     setIssues([])
+  }
+
+  const handleFixWithSWEAgent = async (issue: GitHubIssue) => {
+    if (!selectedRepo) return
+    
+    try {
+      const token = await onGetToken()
+      if (!token) {
+        alert('GitHub token not available. Please re-authenticate.')
+        return
+      }
+
+      const repoUrl = `https://github.com/${selectedRepo.full_name || selectedRepo.name}`
+      const issueUrl = issue.url
+
+      console.log('🚀 Starting SWE-agent for:', { repoUrl, issueUrl })
+
+      const jobResponse = await sweAgentService.startJob({
+        repo_url: repoUrl,
+        issue_url: issueUrl,
+        github_token: token
+      })
+
+      console.log('✅ SWE-agent job started:', jobResponse.job_id)
+      
+      // Get the job details and show status
+      const job = await sweAgentService.getJobStatus(jobResponse.job_id)
+      setActiveJob(job)
+      setShowJobStatus(true)
+
+    } catch (error) {
+      console.error('❌ Error starting SWE-agent:', error)
+      alert(`Failed to start SWE-agent: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  const handleJobComplete = (job: SWEAgentJob) => {
+    console.log('🏁 SWE-agent job completed:', job)
+    if (job.status === 'completed') {
+      // Optionally refresh issues or show success message
+      alert('🎉 SWE-agent has completed the task! Check your repository for the pull request.')
+    } else if (job.status === 'failed') {
+      alert('❌ SWE-agent job failed. Please check the logs for details.')
+    }
   }
 
   if (!isVisible) return null
@@ -360,9 +410,11 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
                     key={issue.number}
                     className="github-issue-item"
                     style={prItemStyles}
-                    onClick={() => window.open(issue.url, '_blank')}
                   >
-                    <div style={prTitleStyles}>
+                    <div 
+                      style={prTitleStyles}
+                      onClick={() => window.open(issue.url, '_blank')}
+                    >
                       #{issue.number} {issue.title}
                     </div>
                     <div style={prMetaStyles}>
@@ -381,6 +433,37 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
                       <div>
                         {new Date(issue.created_at).toLocaleDateString()}
                       </div>
+                    </div>
+                    <div style={{ 
+                      marginTop: '6px', 
+                      display: 'flex', 
+                      gap: '4px',
+                      alignItems: 'center'
+                    }}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleFixWithSWEAgent(issue)
+                        }}
+                        style={{
+                          fontSize: '9px',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          backgroundColor: '#7c3aed',
+                          border: 'none',
+                          color: 'white',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          transition: 'background-color 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#6d28d9'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#7c3aed'}
+                      >
+                        <Bot size={10} />
+                        Fix with SWE-agent
+                      </button>
                     </div>
                   </div>
                 ))
@@ -447,6 +530,31 @@ const GitHubBubble: React.FC<GitHubBubbleProps> = ({
           )}
         </div>
       </div>
+      
+      {/* SWE-agent Job Status Modal */}
+      {showJobStatus && activeJob && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10001
+        }}>
+          <SWEAgentJobStatus
+            jobId={activeJob.job_id}
+            onClose={() => {
+              setShowJobStatus(false)
+              setActiveJob(null)
+            }}
+            onJobComplete={handleJobComplete}
+          />
+        </div>
+      )}
     </>
   )
 }
