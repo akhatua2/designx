@@ -49,8 +49,11 @@ class Settings(BaseSettings):
 
     # Supabase settings
     SUPABASE_URL: str = "https://nkqdhckrtbhrvjpdadmi.supabase.co"
-    SUPABASE_KEY: str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5rcWRoY2tydGJocnZqcGRhZG1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3NDkzOTUsImV4cCI6MjA2NTMyNTM5NX0.fNk4oIAafbMeOtAghmjxRX9qisg7JFTquxJE00LvZOo"
+    SUPABASE_ANON_KEY: str = ""
     SUPABASE_SERVICE_KEY: str = ""  # Add this to .env for admin operations
+
+    # JWT settings
+    JWT_SECRET: str = "your_super_secure_jwt_secret_here"
 
     # Google OAuth settings
     GOOGLE_CLIENT_ID: str = ""
@@ -60,5 +63,6 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"  # Ignore extra fields instead of raising validation errors
 
 settings = Settings() 

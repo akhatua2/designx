@@ -7,18 +7,16 @@ from google.oauth2 import id_token
 from supabase import create_client, Client
 from fastapi import HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from config import settings
 
 # Initialize Supabase client
-supabase_url = os.getenv("SUPABASE_URL")
-supabase_key = os.getenv("SUPABASE_ANON_KEY")
-
-if not supabase_url or not supabase_key:
+if not settings.SUPABASE_URL or not settings.SUPABASE_ANON_KEY:
     raise ValueError("SUPABASE_URL and SUPABASE_ANON_KEY must be set")
 
-supabase: Client = create_client(supabase_url, supabase_key)
+supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
 
 # JWT Configuration
-JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
+JWT_SECRET = settings.JWT_SECRET
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
@@ -34,7 +32,7 @@ class AuthService:
             idinfo = id_token.verify_oauth2_token(
                 token, 
                 requests.Request(), 
-                os.getenv("GOOGLE_CLIENT_ID")
+                settings.GOOGLE_CLIENT_ID
             )
             
             # Verify the issuer
