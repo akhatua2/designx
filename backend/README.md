@@ -28,7 +28,13 @@ FastAPI backend for the DesignX browser extension, providing secure GitHub OAuth
      - Authorization callback URL: `http://localhost:8000/api/github/callback`
    - Copy the Client ID and Client Secret to your `.env` file
 
-4. **Run the server:**
+4. **Ensure token permissions:**
+   The OAuth token requested by the extension must include the `repo` scope so
+   SWE-Agent can clone private repositories and open pull requests directly in
+   your workspace. The default configuration already requests `repo` and
+   `read:user` permissions.
+
+5. **Run the server:**
    ```bash
    python main.py
    ```

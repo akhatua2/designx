@@ -147,6 +147,11 @@ const FloatingIcon: React.FC = () => {
     return googleAuthManager.getToken()
   }
 
+  // Function to get GitHub token for SWE-agent
+  const getGitHubToken = async () => {
+    return gitHubModeManager.getToken()
+  }
+
   // Set up mode state synchronization and cleanup on unmount
   useEffect(() => {
     // Register callback to sync UI state with edit mode state
@@ -430,7 +435,7 @@ const FloatingIcon: React.FC = () => {
         onAuthenticate={handleGitHubAuthenticate}
         onLogout={handleGitHubLogout}
         onSelectRepo={handleGitHubRepoSelect}
-        onGetToken={getGoogleToken}
+        onGetToken={getGitHubToken}
       />
 
       <SlackBubble
