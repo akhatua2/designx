@@ -23,9 +23,13 @@ const GitHubIssueForm: React.FC<GitHubIssueFormProps> = ({
   const [selectedRepo, setSelectedRepo] = useState<GitHubRepo | null>(null)
   const [repos, setRepos] = useState<GitHubRepo[]>([])
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const [isPriorityDropdownOpen, setIsPriorityDropdownOpen] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
+  const [priority, setPriority] = useState<'Low' | 'Medium' | 'High' | 'Critical'>('Medium')
+  const [figmaLink, setFigmaLink] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const priorityDropdownRef = useRef<HTMLDivElement>(null)
 
   // Load repos when component mounts and when auth state changes
   useEffect(() => {
@@ -48,6 +52,9 @@ const GitHubIssueForm: React.FC<GitHubIssueFormProps> = ({
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsDropdownOpen(false)
+      }
+      if (priorityDropdownRef.current && !priorityDropdownRef.current.contains(event.target as Node)) {
+        setIsPriorityDropdownOpen(false)
       }
     }
 
@@ -96,8 +103,8 @@ const GitHubIssueForm: React.FC<GitHubIssueFormProps> = ({
         console.warn('⚠️ Failed to capture screenshot, continuing without it:', error)
       }
       
-      // Create a more professional title
-      const title = `UI Feedback: ${comment.trim().substring(0, 50)}${comment.trim().length > 50 ? '...' : ''}`
+      // Create a more professional title with priority
+      const title = `[${priority}] UI Feedback: ${comment.trim().substring(0, 50)}${comment.trim().length > 50 ? '...' : ''}`
       
       // Create a professional formatted body with React info
       const reactSection = selectedElement.reactInfo?.isReactElement ? `
@@ -136,10 +143,20 @@ ${JSON.stringify(selectedElement.reactInfo.hooks, null, 2)}
 
 ---` : ''
 
+      const figmaSection = figmaLink.trim() ? `
+
+## Design Reference
+
+**Figma Link:** ${figmaLink.trim()}
+
+---` : ''
+
       const body = `## User Feedback
 
 ${comment.trim()}
-${screenshotSection}
+
+**Priority:** ${priority}
+${figmaSection}${screenshotSection}
 
 ### Technical Details
 <details>
@@ -171,6 +188,91 @@ ${reactSection}
     } finally {
       setIsCreating(false)
     }
+  }
+
+  const fieldContainerStyles = {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '6px',
+    marginBottom: '10px'
+  }
+
+  const rowStyles = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    minHeight: '24px'
+  }
+
+  const labelStyles = {
+    fontSize: '10px',
+    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.6)',
+    minWidth: '50px'
+  }
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'Critical': return '#ef4444' // red
+      case 'High': return '#f97316' // orange
+      case 'Medium': return '#eab308' // yellow
+      case 'Low': return '#22c55e' // green
+      default: return '#6b7280' // gray
+    }
+  }
+
+  const priorityContainerStyles = {
+    position: 'relative' as const,
+    display: 'flex',
+    alignItems: 'center'
+  }
+
+  const priorityTagStyles = {
+    padding: '2px 8px',
+    borderRadius: '12px',
+    fontSize: '9px',
+    fontWeight: '600',
+    backgroundColor: getPriorityColor(priority),
+    color: 'white',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.5px',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease'
+  }
+
+  const priorityDropdownStyles = {
+    position: 'absolute' as const,
+    top: '100%',
+    left: '0',
+    marginTop: '4px',
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    borderRadius: '8px',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+    zIndex: 1000,
+    minWidth: '80px'
+  }
+
+  const priorityOptionStyles = (optionPriority: string) => ({
+    padding: '6px 12px',
+    fontSize: '10px',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s ease',
+    color: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: optionPriority === priority ? 'rgba(255, 255, 255, 0.1)' : 'transparent'
+  })
+
+  const figmaInputStyles = {
+    padding: '4px 8px',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    borderRadius: '6px',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: '10px',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+    outline: 'none',
+    flex: 1,
+    transition: 'border-color 0.2s ease'
   }
 
   const textareaStyles = {
@@ -267,9 +369,75 @@ ${reactSection}
           .repo-item:hover {
             background-color: rgba(255, 255, 255, 0.1);
           }
+          .github-select:focus {
+            border-color: rgba(255, 255, 255, 0.25);
+            background-color: rgba(255, 255, 255, 0.08);
+          }
+          .github-figma-input:focus {
+            border-color: rgba(255, 255, 255, 0.3);
+          }
+          .github-figma-input::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+          }
+          .priority-tag:hover {
+            transform: scale(1.05);
+          }
+          .priority-option:hover {
+            background-color: rgba(255, 255, 255, 0.1) !important;
+          }
         `}
       </style>
       
+      <div style={fieldContainerStyles}>
+        <div style={rowStyles}>
+          <span style={labelStyles}>Priority</span>
+          <div style={priorityContainerStyles} ref={priorityDropdownRef}>
+            <span
+              style={priorityTagStyles}
+              className="priority-tag"
+              onClick={() => setIsPriorityDropdownOpen(!isPriorityDropdownOpen)}
+            >
+              {priority}
+            </span>
+            {isPriorityDropdownOpen && (
+              <div style={priorityDropdownStyles}>
+                {(['Low', 'Medium', 'High', 'Critical'] as const).map((option) => (
+                  <div
+                    key={option}
+                    className="priority-option"
+                    style={priorityOptionStyles(option)}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setPriority(option)
+                      setIsPriorityDropdownOpen(false)
+                    }}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                    }}
+                  >
+                    {option}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        
+        <div style={rowStyles}>
+          <span style={labelStyles}>Figma Link</span>
+          <input
+            type="text"
+            value={figmaLink}
+            onChange={(e) => setFigmaLink(e.target.value)}
+            placeholder="Paste Figma link here..."
+            style={figmaInputStyles}
+            className="github-figma-input"
+          />
+        </div>
+      </div>
+
       <textarea
         ref={textareaRef}
         value={comment}
