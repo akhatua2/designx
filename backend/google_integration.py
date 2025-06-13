@@ -10,7 +10,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class GoogleTokenRequest(BaseModel):
-    token: str  # Google ID token from frontend
+    code: str  # Google authorization code from frontend
 
 class GoogleTokenResponse(BaseModel):
     access_token: str

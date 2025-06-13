@@ -87,7 +87,7 @@ class GoogleAuthManager {
         
         // Build Google OAuth URL
         const googleAuthUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
-        googleAuthUrl.searchParams.set('client_id', '705035175306-your-client-id.apps.googleusercontent.com') // You'll need to replace this
+        googleAuthUrl.searchParams.set('client_id', '705035175306-2adpnhaltkhkd9i17d4s693pqknrt6r2.apps.googleusercontent.com')
         googleAuthUrl.searchParams.set('redirect_uri', `${this.API_BASE}/api/google/callback`)
         googleAuthUrl.searchParams.set('response_type', 'code')
         googleAuthUrl.searchParams.set('scope', 'openid email profile')
@@ -116,55 +116,33 @@ class GoogleAuthManager {
             console.log('✅ Google auth code received')
             
             try {
-              // Exchange authorization code for Google ID token
-              const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+              // Exchange authorization code for our JWT (server handles Google token exchange)
+              const authResponse = await fetch(`${this.API_BASE}/api/google/exchange`, {
                 method: 'POST',
                 headers: {
-                  'Content-Type': 'application/x-www-form-urlencoded',
+                  'Content-Type': 'application/json',
                 },
-                body: new URLSearchParams({
-                  code: event.data.code,
-                  client_id: '705035175306-your-client-id.apps.googleusercontent.com', // Replace with actual client ID
-                  client_secret: 'your-client-secret', // This should be handled server-side in production
-                  redirect_uri: `${this.API_BASE}/api/google/callback`,
-                  grant_type: 'authorization_code'
+                body: JSON.stringify({
+                  code: event.data.code
                 })
               })
 
-              const tokenData = await tokenResponse.json()
-              
-              if (tokenData.id_token) {
-                // Exchange Google ID token for our JWT
-                const authResponse = await fetch(`${this.API_BASE}/api/google/exchange`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    token: tokenData.id_token
-                  })
-                })
-
-                if (authResponse.ok) {
-                  const authData: GoogleAuthResponse = await authResponse.json()
-                  
-                  // Store auth data
-                  this.token = authData.access_token
-                  this.user = authData.user
-                  this.isAuthenticated = true
-                  
-                  localStorage.setItem('google_auth_token', authData.access_token)
-                  localStorage.setItem('google_user', JSON.stringify(authData.user))
-                  
-                  console.log('✅ Google authentication successful:', authData.user.email)
-                  this.notifyAuthStateChange()
-                  resolve(true)
-                } else {
-                  console.error('❌ Failed to exchange token with backend')
-                  resolve(false)
-                }
+              if (authResponse.ok) {
+                const authData: GoogleAuthResponse = await authResponse.json()
+                
+                // Store auth data
+                this.token = authData.access_token
+                this.user = authData.user
+                this.isAuthenticated = true
+                
+                localStorage.setItem('google_auth_token', authData.access_token)
+                localStorage.setItem('google_user', JSON.stringify(authData.user))
+                
+                console.log('✅ Google authentication successful:', authData.user.email)
+                this.notifyAuthStateChange()
+                resolve(true)
               } else {
-                console.error('❌ No ID token received from Google')
+                console.error('❌ Failed to exchange token with backend')
                 resolve(false)
               }
               
