@@ -62,6 +62,18 @@ const GitHubIssueForm: React.FC<GitHubIssueFormProps> = ({
     }
   }, [])
 
+  // Auto-resize textarea based on content
+  useEffect(() => {
+    const textarea = textareaRef.current
+    if (textarea) {
+      // Reset height to auto to get the correct scrollHeight
+      textarea.style.height = 'auto'
+      // Calculate the new height based on content
+      const newHeight = Math.max(35, Math.min(textarea.scrollHeight, 120)) // Min 35px, max 120px
+      textarea.style.height = `${newHeight}px`
+    }
+  }, [comment])
+
   const handleSubmit = async () => {
     if (!comment.trim() || !selectedRepo) return
 
@@ -163,6 +175,8 @@ ${reactSection}
 
   const textareaStyles = {
     width: '100%',
+    minHeight: '35px',
+    maxHeight: '120px',
     height: '35px',
     padding: '2px 0',
     border: 'none',
@@ -172,7 +186,8 @@ ${reactSection}
     fontFamily: 'system-ui, -apple-system, sans-serif',
     resize: 'none' as const,
     outline: 'none',
-    marginBottom: '6px'
+    marginBottom: '6px',
+    overflowY: 'auto' as const
   }
 
   const buttonContainerStyles = {
