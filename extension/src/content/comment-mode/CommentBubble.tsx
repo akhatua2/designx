@@ -31,8 +31,8 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
     console.log('📸 Screenshot uploaded and tracked:', screenshotUrl)
   }
 
-  const handleCommentSubmit = async (submittedComment: string, platform: string) => {
-    if (!selectedElement) return
+  const handleCommentSubmit = async (submittedComment: string, platform: string): Promise<any> => {
+    if (!selectedElement) return null
     
     console.log('💬 Comment submitted:')
     console.log('Element:', selectedElement.elementInfo)
@@ -46,8 +46,8 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
     console.log('---')
     
     // Save task to database if user is authenticated
-    // Get stored auth token (adjust based on your auth implementation)
-    const token = localStorage.getItem('google_token') || sessionStorage.getItem('google_token')
+    // Get stored auth token (using correct key from GoogleAuthManager)
+    const token = localStorage.getItem('google_auth_token') || sessionStorage.getItem('google_auth_token')
     
     if (token) {
       try {
@@ -57,35 +57,74 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-                     body: JSON.stringify({
-             comment_text: submittedComment,
-             platform: platform,
-             priority: 'medium',
-             element_info: selectedElement.elementInfo,
-             dom_path: selectedElement.domPath,
-             page_url: window.location.href,
-             screenshot_urls: uploadedScreenshots,
-             metadata: {
-               timestamp: new Date().toISOString(),
-               user_agent: navigator.userAgent
-             }
-           })
+          body: JSON.stringify({
+            comment_text: submittedComment,
+            platform: platform,
+            priority: 'medium',
+            element_info: selectedElement.elementInfo,
+            dom_path: selectedElement.domPath,
+            page_url: window.location.href,
+            screenshot_urls: uploadedScreenshots,
+            metadata: {
+              timestamp: new Date().toISOString(),
+              user_agent: navigator.userAgent
+            }
+          })
         })
 
         if (response.ok) {
           const task = await response.json()
           console.log('✅ Task saved to database:', task)
+          return task
         } else {
           console.error('❌ Failed to save task to database:', response.statusText)
+          return null
         }
       } catch (error) {
         console.error('❌ Error saving task:', error)
+        return null
+      }
+    }
+    return null
+  }
+
+  const updateTaskWithExternalUrl = async (taskId: string, externalUrl: string, externalId?: string) => {
+    const token = localStorage.getItem('google_auth_token') || sessionStorage.getItem('google_auth_token')
+    
+    if (token) {
+      try {
+        const response = await fetch(`https://designx-705035175306.us-central1.run.app/api/tasks/${taskId}`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            external_url: externalUrl,
+            external_id: externalId
+          })
+        })
+
+        if (response.ok) {
+          const updatedTask = await response.json()
+          console.log('✅ Task updated with external URL:', updatedTask)
+        } else {
+          console.error('❌ Failed to update task with external URL:', response.statusText)
+        }
+      } catch (error) {
+        console.error('❌ Error updating task:', error)
       }
     }
   }
 
-  const handleFormSubmit = (submittedComment: string) => {
-    handleCommentSubmit(submittedComment, selectedPlatform)
+  const handleFormSubmit = async (submittedComment: string, externalUrl?: string, externalId?: string) => {
+    const task = await handleCommentSubmit(submittedComment, selectedPlatform)
+    
+    // If we have an external URL and a task was created, update it
+    if (task && externalUrl) {
+      await updateTaskWithExternalUrl(task.id, externalUrl, externalId)
+    }
+    
     setComment('')
     onClose()
   }

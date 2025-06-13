@@ -111,22 +111,23 @@ class ScreenshotService:
                     detail=f"Failed to generate public URL: {str(url_error)}"
                 )
             
-            # Log upload to database for tracking (optional)
+            # Create screenshot record in the screenshots table (for task linking)
             try:
-                upload_record = supabase.table("screenshot_uploads").insert({
+                screenshot_record = supabase.table("screenshots").insert({
                     "user_id": current_user["id"],
-                    "filename": filename,
-                    "original_filename": file.filename,
+                    "filename": filename.split('/')[-1],  # Just the filename, not the path
+                    "file_path": filename,  # Full path for storage reference
                     "file_size": len(file_content),
                     "content_type": file.content_type,
-                    "public_url": public_url
+                    "upload_url": public_url,
+                    "tasks_id": None  # Will be linked to task later
                 }).execute()
                 
-                logger.info(f"📊 Upload logged to database: {upload_record.data[0]['id'] if upload_record.data else 'unknown'}")
+                logger.info(f"📊 Screenshot record created in database: {screenshot_record.data[0]['id'] if screenshot_record.data else 'unknown'}")
                 
             except Exception as db_error:
                 # Don't fail the upload if database logging fails
-                logger.warning(f"⚠️ Failed to log upload to database: {str(db_error)}")
+                logger.warning(f"⚠️ Failed to create screenshot record in database: {str(db_error)}")
             
             return {
                 "success": True,

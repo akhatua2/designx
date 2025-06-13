@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { X, User, CheckCircle, Clock, AlertCircle } from 'lucide-react'
+import { X, User, CheckCircle, Clock, AlertCircle, LogOut } from 'lucide-react'
 import TasksList from './TasksList'
 
 interface Screenshot {
@@ -32,12 +32,14 @@ interface UserBubbleProps {
   isVisible: boolean
   user: any // Google user object
   onClose: () => void
+  onLogout?: () => void
 }
 
 const UserBubble: React.FC<UserBubbleProps> = ({ 
   isVisible,
   user,
-  onClose
+  onClose,
+  onLogout
 }) => {
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(false)
@@ -55,8 +57,8 @@ const UserBubble: React.FC<UserBubbleProps> = ({
     setError(null)
     
     try {
-      // Get the stored auth token (you might need to adjust this based on your auth implementation)
-      const token = localStorage.getItem('google_token') || sessionStorage.getItem('google_token')
+      // Get the stored auth token (using the correct key from GoogleAuthManager)
+      const token = localStorage.getItem('google_auth_token') || sessionStorage.getItem('google_auth_token')
       
       if (!token) {
         throw new Error('No authentication token found')
@@ -85,7 +87,7 @@ const UserBubble: React.FC<UserBubbleProps> = ({
 
   const updateTaskStatus = async (taskId: string, status: string) => {
     try {
-      const token = localStorage.getItem('google_token') || sessionStorage.getItem('google_token')
+      const token = localStorage.getItem('google_auth_token') || sessionStorage.getItem('google_auth_token')
       
       if (!token) {
         throw new Error('No authentication token found')
@@ -116,6 +118,22 @@ const UserBubble: React.FC<UserBubbleProps> = ({
       console.error('Error updating task:', err)
       setError(err instanceof Error ? err.message : 'Failed to update task')
     }
+  }
+
+  const handleLogout = () => {
+    // Clear authentication tokens (using correct keys)
+    localStorage.removeItem('google_auth_token')
+    localStorage.removeItem('google_user')
+    sessionStorage.removeItem('google_auth_token')
+    sessionStorage.removeItem('google_user')
+    
+    // Call parent logout handler if provided
+    if (onLogout) {
+      onLogout()
+    }
+    
+    // Close the bubble
+    onClose()
   }
 
   if (!isVisible) return null
@@ -190,6 +208,20 @@ const UserBubble: React.FC<UserBubbleProps> = ({
     display: 'flex',
     flexDirection: 'column' as const,
     flex: 1
+  }
+
+  const logoutButtonStyles = {
+    background: 'none',
+    border: 'none',
+    color: 'rgba(255, 255, 255, 0.6)',
+    cursor: 'pointer',
+    padding: '4px',
+    borderRadius: '4px',
+    transition: 'color 0.2s ease',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    fontSize: '10px'
   }
 
   const userNameStyles = {
@@ -279,6 +311,15 @@ const UserBubble: React.FC<UserBubbleProps> = ({
             <div style={userNameStyles}>{user?.name}</div>
             <div style={userEmailStyles}>{user?.email}</div>
           </div>
+          <button
+            onClick={handleLogout}
+            style={logoutButtonStyles}
+            title="Logout"
+            onMouseEnter={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)'}
+            onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)'}
+          >
+            <LogOut size={12} />
+          </button>
         </div>
 
         {/* Task Stats */}

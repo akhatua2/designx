@@ -9,7 +9,7 @@ interface GitHubIssueFormProps {
   selectedElement: SelectedElement
   comment: string
   onCommentChange: (comment: string) => void
-  onSubmit: (comment: string) => void
+  onSubmit: (comment: string, externalUrl?: string, externalId?: string) => void
   onKeyDown: (e: React.KeyboardEvent) => void
   onScreenshotUploaded: (screenshotUrl: string) => void
 }
@@ -186,7 +186,9 @@ ${reactSection}
       
       const issueUrl = await gitHubModeManager.createIssue(selectedRepo.full_name, title, body)
       if (issueUrl) {
-        onSubmit(comment.trim())
+        // Extract issue number from URL for external_id
+        const issueNumber = issueUrl.split('/issues/')[1]
+        onSubmit(comment.trim(), issueUrl, issueNumber)
         window.open(issueUrl, '_blank')
       }
     } finally {

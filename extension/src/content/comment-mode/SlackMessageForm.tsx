@@ -8,7 +8,7 @@ interface SlackMessageFormProps {
   selectedElement: SelectedElement
   comment: string
   onCommentChange: (comment: string) => void
-  onSubmit: (comment: string) => void
+  onSubmit: (comment: string, externalUrl?: string, externalId?: string) => void
   onKeyDown: (e: React.KeyboardEvent) => void
   onScreenshotUploaded: (screenshotUrl: string) => void
 }
@@ -85,6 +85,7 @@ const SlackMessageForm: React.FC<SlackMessageFormProps> = ({
       
       const messageTs = await slackModeManager.createIssue(selectedChannel.id, messageText, '')
       if (messageTs) {
+        // For Slack, we could generate a message URL, but for now just submit without external URL
         onSubmit(comment.trim())
       }
     } finally {
