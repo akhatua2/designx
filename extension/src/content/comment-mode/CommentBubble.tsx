@@ -86,9 +86,9 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
     jiraModeManager.onAuthStateChange(handleJiraAuthChange)
 
     return () => {
-      gitHubModeManager.onAuthStateChange(() => {})
-      slackModeManager.onAuthStateChange(() => {})
-      jiraModeManager.onAuthStateChange(() => {})
+      // Note: Current integration managers don't have a removeAuthStateChangeListener method
+      // This is a limitation of the current implementation
+      // For now, we'll leave this as is, but ideally we'd properly remove listeners
     }
   }, [selectedPlatform])
 
@@ -122,8 +122,65 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
     setIsCreatingMessage(true)
     try {
       if (selectedPlatform === 'github' && isGitHubRepo(selectedChannel)) {
-        const title = `Feedback: ${getMinimalElementInfo(selectedElement!.elementInfo)}`
-        const body = `${comment.trim()}\n\n---\n**Element Info:**\n\`${selectedElement!.elementInfo}\`\n\n**DOM Path:**\n\`${selectedElement!.domPath}\``
+        
+        // Create a more professional title
+        const title = `UI Feedback: ${comment.trim().substring(0, 50)}${comment.trim().length > 50 ? '...' : ''}`
+        
+        // Create a professional formatted body with React info
+        const reactSection = selectedElement!.reactInfo?.isReactElement ? `
+
+**React Component:**
+\`\`\`
+${selectedElement!.reactInfo.componentName || 'Anonymous Component'}
+${selectedElement!.reactInfo.displayName ? `Display Name: ${selectedElement!.reactInfo.displayName}` : ''}
+${selectedElement!.reactInfo.filePath ? `File: ${selectedElement!.reactInfo.filePath}${selectedElement!.reactInfo.lineNumber ? `:${selectedElement!.reactInfo.lineNumber}` : ''}` : ''}
+${selectedElement!.reactInfo.reactVersion ? `React Version: ${selectedElement!.reactInfo.reactVersion}` : ''}
+\`\`\`
+
+${selectedElement!.reactInfo.props && Object.keys(selectedElement!.reactInfo.props).length > 0 ? `**Props:**
+\`\`\`json
+${JSON.stringify(selectedElement!.reactInfo.props, null, 2)}
+\`\`\`` : ''}
+
+${selectedElement!.reactInfo.state && Object.keys(selectedElement!.reactInfo.state).length > 0 ? `**State:**
+\`\`\`json
+${JSON.stringify(selectedElement!.reactInfo.state, null, 2)}
+\`\`\`` : ''}
+
+${selectedElement!.reactInfo.hooks && selectedElement!.reactInfo.hooks.length > 0 ? `**Hooks:**
+\`\`\`json
+${JSON.stringify(selectedElement!.reactInfo.hooks, null, 2)}
+\`\`\`` : ''}
+` : ''
+
+        const body = `## User Feedback
+
+${comment.trim()}
+
+---
+
+### Technical Details
+<details>
+<summary>Click to view technical information</summary>
+
+**Element Information:**
+\`\`\`
+${selectedElement!.elementInfo}
+\`\`\`
+
+**DOM Path:**
+\`\`\`
+${selectedElement!.domPath}
+\`\`\`
+${reactSection}
+**Page URL:** ${window.location.href}
+
+**Timestamp:** ${new Date().toISOString()}
+</details>
+
+---
+*This issue was created automatically using DesignX feedback tool*`
+        
         const issueUrl = await gitHubModeManager.createIssue(selectedChannel.full_name, title, body)
         if (issueUrl) {
           // Get the GitHub token
@@ -167,8 +224,35 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
           onClose()
         }
       } else if (selectedPlatform === 'jira' && isJiraProject(selectedChannel)) {
-        const title = `Feedback: ${getMinimalElementInfo(selectedElement!.elementInfo)}`
-        const body = `${comment.trim()}\n\n---\nElement Info: ${selectedElement!.elementInfo}\n\nDOM Path: ${selectedElement!.domPath}`
+        // Create a more professional title for Jira
+        const title = `UI Feedback: ${comment.trim().substring(0, 50)}${comment.trim().length > 50 ? '...' : ''}`
+        
+        // Create a professional formatted body for Jira
+        const body = `h2. User Feedback
+
+${comment.trim()}
+
+----
+
+h3. Technical Details
+
+*Element Information:*
+{code}
+${selectedElement!.elementInfo}
+{code}
+
+*DOM Path:*
+{code}
+${selectedElement!.domPath}
+{code}
+
+*Page URL:* ${window.location.href}
+
+*Timestamp:* ${new Date().toISOString()}
+
+----
+_This issue was created automatically using DesignX feedback tool_`
+        
         const issueUrl = await jiraModeManager.createIssue(selectedChannel.key, title, body)
         if (issueUrl) {
           onSubmit(comment.trim())
@@ -485,12 +569,18 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
                 ) : (
                   channels.map((channel) => (
                     <div
-                      key={String(channel.id)}
+                      key={String(channel.id) || channel.full_name || channel.name}
                       className="channel-item"
                       style={channelItemStyles}
-                      onClick={() => {
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
                         setSelectedChannel(channel)
                         setIsChannelDropdownOpen(false)
+                      }}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
                       }}
                     >
                       {getChannelDisplayName(channel)}

@@ -1,4 +1,6 @@
 // Function to generate a unique DOM path for an element
+import { ReactComponentDetector, type ReactComponentInfo } from './ReactComponentDetector'
+
 const generateDOMPath = (element: Element): string => {
   const path: string[] = []
   let current = element
@@ -38,6 +40,7 @@ export interface SelectedElement {
   element: Element
   domPath: string
   elementInfo: string
+  reactInfo?: ReactComponentInfo
 }
 
 export class CommentModeManager {
@@ -91,9 +94,27 @@ export class CommentModeManager {
     const domPath = generateDOMPath(target)
     const elementInfo = this.getElementInfo(target)
     
+    // Extract React component information if available
+    let reactInfo: ReactComponentInfo | undefined
+    console.log('🔍 Checking if React is available...')
+    const isReactAvailable = ReactComponentDetector.isReactAvailable()
+    console.log('React available:', isReactAvailable)
+    
+    if (isReactAvailable) {
+      console.log('🔍 Extracting React info from element...')
+      reactInfo = ReactComponentDetector.extractReactInfo(target)
+      console.log('React detection result:', reactInfo)
+    } else {
+      console.log('❌ React not detected on this page')
+    }
+    
     console.log('💬 Element clicked in comment mode:')
     console.log('DOM Path:', domPath)
     console.log('Element:', target)
+    if (reactInfo?.isReactElement) {
+      console.log('⚛️ React Component:', reactInfo.componentName || 'Anonymous')
+      console.log('React Info:', ReactComponentDetector.formatComponentInfo(reactInfo))
+    }
     console.log('Ready to add comment to this element!')
     console.log('---')
 
@@ -102,7 +123,8 @@ export class CommentModeManager {
       this.onElementSelectedCallback({
         element: target,
         domPath,
-        elementInfo
+        elementInfo,
+        reactInfo
       })
     }
 
