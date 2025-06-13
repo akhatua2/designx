@@ -778,6 +778,12 @@ async def run_sweagent(request: RunSWEAgentRequest):
         os.environ["GITHUB_TOKEN"] = request.github_token
         os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
         
+        # Add Modal credentials for deployment
+        if hasattr(settings, 'MODAL_TOKEN_ID') and settings.MODAL_TOKEN_ID:
+            os.environ["MODAL_TOKEN_ID"] = settings.MODAL_TOKEN_ID
+        if hasattr(settings, 'MODAL_TOKEN_SECRET') and settings.MODAL_TOKEN_SECRET:
+            os.environ["MODAL_TOKEN_SECRET"] = settings.MODAL_TOKEN_SECRET
+        
         logger.info("🔧 Environment variables updated")
         
         # Import SWE-agent modules
