@@ -782,6 +782,10 @@ async def run_sweagent(request: RunSWEAgentRequest):
         
         # Import SWE-agent modules
         try:
+            # Add SWE-agent to path (it's now in the same directory)
+            import sys
+            sys.path.insert(0, '/app/SWE-agent')
+            
             from sweagent.run.run_single import RunSingleConfig, run_from_config
             from sweagent.environment.swe_env import EnvironmentConfig
             from sweagent.agent.agents import DefaultAgentConfig
