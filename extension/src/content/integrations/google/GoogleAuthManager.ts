@@ -47,25 +47,69 @@ class GoogleAuthManager {
   async checkExistingAuth(): Promise<void> {
     try {
       const storedToken = localStorage.getItem('google_auth_token')
+      const storedUser = localStorage.getItem('google_user')
+      
       if (storedToken) {
-        // Verify token is still valid
-        const response = await fetch(`${this.API_BASE}/api/user/me`, {
-          headers: {
-            'Authorization': `Bearer ${storedToken}`
-          }
-        })
+        console.log('🔍 Found stored Google token, verifying...')
         
-        if (response.ok) {
-          const userData = await response.json()
-          this.user = userData
-          this.token = storedToken
-          this.isAuthenticated = true
-          console.log('✅ Existing Google auth found:', userData.email)
-          this.notifyAuthStateChange()
-        } else {
-          // Token is invalid, clear it
-          this.clearAuth()
+        try {
+          // Verify token is still valid
+          const response = await fetch(`${this.API_BASE}/api/user/me`, {
+            headers: {
+              'Authorization': `Bearer ${storedToken}`
+            }
+          })
+          
+          if (response.ok) {
+            const userData = await response.json()
+            console.log('📊 Server returned user data:', userData)
+            
+            // Validate user data has required fields
+            if (userData && userData.email && userData.name) {
+              this.user = userData
+              this.token = storedToken
+              this.isAuthenticated = true
+              console.log('✅ Existing Google auth verified with server:', userData.email)
+              this.notifyAuthStateChange()
+              return
+            } else {
+              console.warn('⚠️ Server returned incomplete user data:', userData)
+            }
+          } else {
+            console.warn('⚠️ Server token validation failed:', response.status, response.statusText)
+          }
+        } catch (fetchError) {
+          console.warn('⚠️ Network error during token validation:', fetchError)
         }
+        
+        // If server verification failed but we have stored user data, use it temporarily
+        if (storedUser) {
+          try {
+            const userData = JSON.parse(storedUser)
+            console.log('📊 Cached user data:', userData)
+            
+            // Validate cached user data has required fields
+            if (userData && userData.email && userData.name) {
+              this.user = userData
+              this.token = storedToken
+              this.isAuthenticated = true
+              console.log('✅ Using cached Google auth data:', userData.email)
+              console.log('ℹ️ (Server verification failed, but using cached data)')
+              this.notifyAuthStateChange()
+              return
+            } else {
+              console.warn('⚠️ Cached user data incomplete:', userData)
+            }
+          } catch (parseError) {
+            console.error('❌ Failed to parse stored user data:', parseError)
+          }
+        }
+        
+        // If we reach here, both server verification and cached data failed
+        console.log('🧹 Clearing invalid auth data')
+        this.clearAuth()
+      } else {
+        console.log('🔍 No stored Google token found')
       }
     } catch (error) {
       console.error('❌ Error checking existing Google auth:', error)
@@ -108,7 +152,18 @@ class GoogleAuthManager {
 
         // Listen for messages from popup
         const handleMessage = async (event: MessageEvent) => {
-          if (event.origin !== this.API_BASE) {
+          console.log('📨 Received message:', event.data, 'from:', event.origin)
+          
+          // More flexible origin checking for development and production
+          const allowedOrigins = [
+            this.API_BASE,
+            'https://designx-705035175306.us-central1.run.app',
+            'http://localhost:8000', // For local development
+            'https://localhost:8000'
+          ]
+          
+          if (!allowedOrigins.includes(event.origin)) {
+            console.warn('⚠️ Message from unallowed origin:', event.origin)
             return
           }
 
@@ -129,20 +184,28 @@ class GoogleAuthManager {
 
               if (authResponse.ok) {
                 const authData: GoogleAuthResponse = await authResponse.json()
+                console.log('📊 Auth response from server:', authData)
                 
-                // Store auth data
-                this.token = authData.access_token
-                this.user = authData.user
-                this.isAuthenticated = true
-                
-                localStorage.setItem('google_auth_token', authData.access_token)
-                localStorage.setItem('google_user', JSON.stringify(authData.user))
-                
-                console.log('✅ Google authentication successful:', authData.user.email)
-                this.notifyAuthStateChange()
-                resolve(true)
+                // Validate the response has required data
+                if (authData && authData.access_token && authData.user && authData.user.email) {
+                  // Store auth data
+                  this.token = authData.access_token
+                  this.user = authData.user
+                  this.isAuthenticated = true
+                  
+                  localStorage.setItem('google_auth_token', authData.access_token)
+                  localStorage.setItem('google_user', JSON.stringify(authData.user))
+                  
+                  console.log('✅ Google authentication successful:', authData.user.email)
+                  this.notifyAuthStateChange()
+                  resolve(true)
+                } else {
+                  console.error('❌ Invalid auth response from server:', authData)
+                  resolve(false)
+                }
               } else {
-                console.error('❌ Failed to exchange token with backend')
+                const errorText = await authResponse.text()
+                console.error('❌ Failed to exchange token with backend:', authResponse.status, errorText)
                 resolve(false)
               }
               
@@ -151,13 +214,26 @@ class GoogleAuthManager {
               resolve(false)
             }
             
-            popup.close()
+            // Clean up
+            try {
+              if (popup && !popup.closed) {
+                popup.close()
+              }
+            } catch (closeError) {
+              console.warn('⚠️ Could not close popup:', closeError)
+            }
             window.removeEventListener('message', handleMessage)
             
           } else if (event.data.type === 'GOOGLE_AUTH_ERROR') {
             console.error('❌ Google auth error:', event.data.error)
             resolve(false)
-            popup.close()
+            try {
+              if (popup && !popup.closed) {
+                popup.close()
+              }
+            } catch (closeError) {
+              console.warn('⚠️ Could not close popup:', closeError)
+            }
             window.removeEventListener('message', handleMessage)
           }
         }
@@ -166,13 +242,36 @@ class GoogleAuthManager {
 
         // Check if popup was closed manually
         const checkClosed = setInterval(() => {
-          if (popup.closed) {
-            clearInterval(checkClosed)
-            window.removeEventListener('message', handleMessage)
-            console.log('🔒 Google auth popup closed manually')
-            resolve(false)
+          try {
+            if (popup.closed) {
+              clearInterval(checkClosed)
+              window.removeEventListener('message', handleMessage)
+              console.log('🔒 Google auth popup closed manually')
+              resolve(false)
+            }
+          } catch (error) {
+            // COOP policy may block access to popup.closed
+            console.warn('⚠️ Cannot check popup status (COOP policy):', error)
+            // Don't clear the interval immediately, give it more time
           }
         }, 1000)
+
+        // Fallback timeout in case popup checking fails
+        setTimeout(() => {
+          clearInterval(checkClosed)
+          window.removeEventListener('message', handleMessage)
+          if (!this.isAuthenticated) {
+            console.log('⏰ Google auth timeout')
+            try {
+              if (popup && !popup.closed) {
+                popup.close()
+              }
+            } catch (closeError) {
+              console.warn('⚠️ Could not close popup on timeout:', closeError)
+            }
+            resolve(false)
+          }
+        }, 60000) // 60 second timeout
 
       } catch (error) {
         console.error('❌ Google authentication error:', error)
