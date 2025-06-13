@@ -11,7 +11,6 @@ import type { Project } from './integrations/IntegrationManager'
 // Inline styles to ensure the component works exactly as before
 const styles = {
   menuButton: {
-    width: '160px',
     height: '44px',
     borderRadius: '22px',
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
@@ -21,11 +20,50 @@ const styles = {
     border: '1px solid rgba(255, 255, 255, 0.1)',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-around',
-    padding: '0 0 0 8px',
+    justifyContent: 'center',
+    padding: '0 8px',
     boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.2)',
-    transition: 'all 0.2s ease',
+    transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+    pointerEvents: 'auto' as const,
+    overflow: 'hidden',
+    position: 'relative' as const
+  },
+  menuButtonCollapsed: {
+    width: '44px',
+    borderRadius: '50%',
+    justifyContent: 'center',
+    padding: '0'
+  },
+  menuButtonExpanded: {
+    width: '250px',
+    borderRadius: '22px',
+    justifyContent: 'space-between',
+    padding: '0 8px'
+  },
+  iconsContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+    opacity: 0,
+    transform: 'scale(0.8)',
+    pointerEvents: 'none' as const
+  },
+  iconsContainerVisible: {
+    display: 'flex',
+    opacity: 1,
+    transform: 'scale(1)',
     pointerEvents: 'auto' as const
+  },
+  iconsContainerHidden: {
+    display: 'none'
+  },
+  iconButton: {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    padding: '4px',
+    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
   },
   profileButton: {
     background: 'none',
@@ -38,7 +76,8 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    transition: 'all 0.2s ease'
+    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+    flexShrink: 0
   },
   profilePicture: {
     width: '32px',
@@ -60,6 +99,7 @@ const styles = {
 const FloatingIcon: React.FC = () => {
   const [selectedIcon, setSelectedIcon] = useState<string | null>(null)
   const [selectedElement, setSelectedElement] = useState<SelectedElement | null>(null)
+  const [isHovered, setIsHovered] = useState(false)
   
   // Google Auth state
   const [isGoogleAuthenticated, setIsGoogleAuthenticated] = useState(false)
@@ -421,127 +461,110 @@ const FloatingIcon: React.FC = () => {
       <div 
         style={{
           ...styles.menuButton,
-          width: '250px' // Reduce width for tighter layout
+          ...(isHovered ? styles.menuButtonExpanded : styles.menuButtonCollapsed)
         }}
         className="relative"
         data-floating-icon="true"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       >
-        <button
-          onClick={handleGitHub}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: '4px'
-          }}
-        >
-          <Github 
-            style={{ 
-              width: '18px', 
-              height: '18px', 
-              color: 'white',
-              opacity: 0.9,
-              strokeWidth: 2.5,
-              fill: selectedIcon === 'github' ? 'currentColor' : 'none',
-              stroke: 'currentColor'
-            }} 
-          />
-        </button>
-
-        <button
-          onClick={handleSlack}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: '4px'
-          }}
-        >
-          <Slack 
-            style={{ 
-              width: '18px', 
-              height: '18px', 
-              color: 'white',
-              opacity: 0.9,
-              strokeWidth: 2.5,
-              fill: selectedIcon === 'slack' ? 'currentColor' : 'none',
-              stroke: 'currentColor'
-            }} 
-          />
-        </button>
-
-        <button
-          onClick={handleJira}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: '4px'
-          }}
-        >
-          <svg 
-            width="18" 
-            height="18" 
-            viewBox="0 0 24 24" 
-            fill={selectedIcon === 'jira' ? 'currentColor' : 'none'}
-            stroke="currentColor"
-            strokeWidth="2.5"
-            style={{ 
-              color: 'white',
-              opacity: 0.9
-            }}
+        {/* Icons Container - Only visible when expanded */}
+        <div style={{
+          ...styles.iconsContainer,
+          ...(isHovered ? styles.iconsContainerVisible : styles.iconsContainerHidden)
+        }}>
+          <button
+            onClick={handleGitHub}
+            style={styles.iconButton}
           >
-            <path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 6.62 5.367 11.987 11.988 11.987s11.987-5.367 11.987-11.987C24.004 5.367 18.637.001 12.017.001zm-.008 21.347c-5.157 0-9.36-4.202-9.36-9.36 0-5.157 4.203-9.36 9.36-9.36s9.36 4.203 9.36 9.36c0 5.158-4.203 9.36-9.36 9.36z"/>
-            <path d="M12.017 4.422L8.78 7.659l3.237 3.237 3.237-3.237z" fill="#2684FF"/>
-            <path d="M12.017 12.776l3.237 3.237-3.237 3.237-3.237-3.237z"/>
-          </svg>
-        </button>
-        
-        <button
-          onClick={handleComment}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: '4px'
-          }}
-        >
-          <MessageCircle 
-            style={{ 
-              width: '18px', 
-              height: '18px', 
-              color: 'white',
-              opacity: 0.9,
-              strokeWidth: 2.5,
-              fill: selectedIcon === 'comment' ? 'currentColor' : 'none',
-              stroke: 'currentColor'
-            }} 
-          />
-        </button>
-        
-        <button
-          onClick={handleEdit}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: '4px'
-          }}
-        >
-          <Edit3 
-            style={{ 
-              width: '18px', 
-              height: '18px', 
-              color: 'white',
-              opacity: 0.9,
-              strokeWidth: 2.5,
-              fill: selectedIcon === 'edit' ? 'currentColor' : 'none',
-              stroke: 'currentColor'
-            }} 
-          />
-        </button>
+            <Github 
+              style={{ 
+                width: '18px', 
+                height: '18px', 
+                color: 'white',
+                opacity: 0.9,
+                strokeWidth: 2.5,
+                fill: selectedIcon === 'github' ? 'currentColor' : 'none',
+                stroke: 'currentColor'
+              }} 
+            />
+          </button>
 
-        {/* Profile Picture / Google Auth Button - Moved to the right */}
+          <button
+            onClick={handleSlack}
+            style={styles.iconButton}
+          >
+            <Slack 
+              style={{ 
+                width: '18px', 
+                height: '18px', 
+                color: 'white',
+                opacity: 0.9,
+                strokeWidth: 2.5,
+                fill: selectedIcon === 'slack' ? 'currentColor' : 'none',
+                stroke: 'currentColor'
+              }} 
+            />
+          </button>
+
+          <button
+            onClick={handleJira}
+            style={styles.iconButton}
+          >
+            <svg 
+              width="18" 
+              height="18" 
+              viewBox="0 0 24 24" 
+              fill={selectedIcon === 'jira' ? 'currentColor' : 'none'}
+              stroke="currentColor"
+              strokeWidth="2.5"
+              style={{ 
+                color: 'white',
+                opacity: 0.9
+              }}
+            >
+              <path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 6.62 5.367 11.987 11.988 11.987s11.987-5.367 11.987-11.987C24.004 5.367 18.637.001 12.017.001zm-.008 21.347c-5.157 0-9.36-4.202-9.36-9.36 0-5.157 4.203-9.36 9.36-9.36s9.36 4.203 9.36 9.36c0 5.158-4.203 9.36-9.36 9.36z"/>
+              <path d="M12.017 4.422L8.78 7.659l3.237 3.237 3.237-3.237z" fill="#2684FF"/>
+              <path d="M12.017 12.776l3.237 3.237-3.237 3.237-3.237-3.237z"/>
+            </svg>
+          </button>
+          
+          <button
+            onClick={handleComment}
+            style={styles.iconButton}
+          >
+            <MessageCircle 
+              style={{ 
+                width: '18px', 
+                height: '18px', 
+                color: 'white',
+                opacity: 0.9,
+                strokeWidth: 2.5,
+                fill: selectedIcon === 'comment' ? 'currentColor' : 'none',
+                stroke: 'currentColor'
+              }} 
+            />
+          </button>
+          
+          <button
+            onClick={handleEdit}
+            style={styles.iconButton}
+          >
+            <Edit3 
+              style={{ 
+                width: '18px', 
+                height: '18px', 
+                color: 'white',
+                opacity: 0.9,
+                strokeWidth: 2.5,
+                fill: selectedIcon === 'edit' ? 'currentColor' : 'none',
+                stroke: 'currentColor'
+              }} 
+            />
+          </button>
+        </div>
+
+        {/* Profile Picture / Google Auth Button - Always visible */}
         <button
           onClick={handleGoogleAuth}
           style={styles.profileButton}
