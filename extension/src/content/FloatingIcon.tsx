@@ -22,7 +22,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-around',
-    padding: '0 16px',
+    padding: '0 0 0 8px',
     boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.2)',
     transition: 'all 0.2s ease',
     pointerEvents: 'auto' as const
@@ -31,24 +31,24 @@ const styles = {
     background: 'none',
     border: 'none',
     cursor: 'pointer',
-    padding: '2px',
+    padding: '0px',
     borderRadius: '50%',
-    width: '24px',
-    height: '24px',
+    width: '36px',
+    height: '36px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     transition: 'all 0.2s ease'
   },
   profilePicture: {
-    width: '20px',
-    height: '20px',
+    width: '32px',
+    height: '32px',
     borderRadius: '50%',
     objectFit: 'cover' as const
   },
   profilePlaceholder: {
-    width: '20px',
-    height: '20px',
+    width: '32px',
+    height: '32px',
     borderRadius: '50%',
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     display: 'flex',
@@ -421,37 +421,11 @@ const FloatingIcon: React.FC = () => {
       <div 
         style={{
           ...styles.menuButton,
-          width: '240px' // Increase width to accommodate profile picture
+          width: '250px' // Reduce width for tighter layout
         }}
         className="relative"
         data-floating-icon="true"
       >
-        {/* Profile Picture / Google Auth Button */}
-        <button
-          onClick={handleGoogleAuth}
-          style={styles.profileButton}
-          title={isGoogleAuthenticated ? `${googleUser?.name} (${googleUser?.email})` : 'Sign in with Google'}
-        >
-          {isGoogleAuthenticated && googleUser?.picture ? (
-            <img 
-              src={googleUser.picture} 
-              alt={googleUser.name}
-              style={styles.profilePicture}
-            />
-          ) : (
-            <div style={styles.profilePlaceholder}>
-              <User 
-                style={{ 
-                  width: '12px', 
-                  height: '12px', 
-                  color: 'white',
-                  opacity: 0.7
-                }} 
-              />
-            </div>
-          )}
-        </button>
-
         <button
           onClick={handleGitHub}
           style={{
@@ -565,6 +539,32 @@ const FloatingIcon: React.FC = () => {
               stroke: 'currentColor'
             }} 
           />
+        </button>
+
+        {/* Profile Picture / Google Auth Button - Moved to the right */}
+        <button
+          onClick={handleGoogleAuth}
+          style={styles.profileButton}
+          title={isGoogleAuthenticated ? `${googleUser?.name} (${googleUser?.email})` : 'Sign in with Google'}
+        >
+          {isGoogleAuthenticated && googleUser?.picture ? (
+            <img 
+              src={googleUser.picture} 
+              alt={googleUser.name}
+              style={styles.profilePicture}
+            />
+          ) : (
+            <div style={styles.profilePlaceholder}>
+              <User 
+                style={{ 
+                  width: '18px', 
+                  height: '18px', 
+                  color: 'white',
+                  opacity: 0.7
+                }} 
+              />
+            </div>
+          )}
         </button>
       </div>
     </>
