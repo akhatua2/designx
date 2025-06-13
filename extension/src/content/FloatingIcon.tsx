@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { MessageCircle, Edit3, Github, MessageSquare, Slack, User } from 'lucide-react'
+import githubColorIcon from './assets/github-color.svg?url'
+import slackColorIcon from './assets/slack-color.svg?url'
+import jiraColorIcon from './assets/jira-color.svg?url'
 import { editModeManager } from './edit-mode'
 import { commentModeManager, type SelectedElement, CommentBubble } from './comment-mode'
 import { gitHubModeManager, type GitHubUser, GitHubBubble } from './integrations/github'
@@ -482,56 +485,77 @@ const FloatingIcon: React.FC = () => {
             onClick={handleGitHub}
             style={styles.iconButton}
           >
-            <Github 
-              style={{ 
-                width: '18px', 
-                height: '18px', 
-                color: 'white',
-                opacity: 0.9,
-                strokeWidth: 2.5,
-                fill: selectedIcon === 'github' ? 'currentColor' : 'none',
-                stroke: 'currentColor'
-              }} 
-            />
+            {selectedIcon === 'github' ? (
+              <img
+                src={githubColorIcon}
+                style={{ width: '18px', height: '18px' }}
+              />
+            ) : (
+              <Github
+                style={{
+                  width: '18px',
+                  height: '18px',
+                  color: 'white',
+                  opacity: 0.9,
+                  strokeWidth: 2.5,
+                  fill: 'none',
+                  stroke: 'currentColor'
+                }}
+              />
+            )}
           </button>
 
           <button
             onClick={handleSlack}
             style={styles.iconButton}
           >
-            <Slack 
-              style={{ 
-                width: '18px', 
-                height: '18px', 
-                color: 'white',
-                opacity: 0.9,
-                strokeWidth: 2.5,
-                fill: selectedIcon === 'slack' ? 'currentColor' : 'none',
-                stroke: 'currentColor'
-              }} 
-            />
+            {selectedIcon === 'slack' ? (
+              <img
+                src={slackColorIcon}
+                style={{ width: '18px', height: '18px' }}
+              />
+            ) : (
+              <Slack
+                style={{
+                  width: '18px',
+                  height: '18px',
+                  color: 'white',
+                  opacity: 0.9,
+                  strokeWidth: 2.5,
+                  fill: 'none',
+                  stroke: 'currentColor'
+                }}
+              />
+            )}
           </button>
 
           <button
             onClick={handleJira}
             style={styles.iconButton}
           >
-            <svg 
-              width="18" 
-              height="18" 
-              viewBox="0 0 24 24" 
-              fill={selectedIcon === 'jira' ? 'currentColor' : 'none'}
-              stroke="currentColor"
-              strokeWidth="2.5"
-              style={{ 
-                color: 'white',
-                opacity: 0.9
-              }}
-            >
-              <path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 6.62 5.367 11.987 11.988 11.987s11.987-5.367 11.987-11.987C24.004 5.367 18.637.001 12.017.001zm-.008 21.347c-5.157 0-9.36-4.202-9.36-9.36 0-5.157 4.203-9.36 9.36-9.36s9.36 4.203 9.36 9.36c0 5.158-4.203 9.36-9.36 9.36z"/>
-              <path d="M12.017 4.422L8.78 7.659l3.237 3.237 3.237-3.237z" fill="#2684FF"/>
-              <path d="M12.017 12.776l3.237 3.237-3.237 3.237-3.237-3.237z"/>
-            </svg>
+            {selectedIcon === 'jira' ? (
+              <img
+                src={jiraColorIcon}
+                style={{ width: '18px', height: '18px' }}
+              />
+            ) : (
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                style={{
+                  color: 'white',
+                  opacity: 0.9
+                }}
+              >
+                <path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 6.62 5.367 11.987 11.988 11.987s11.987-5.367 11.987-11.987C24.004 5.367 18.637.001 12.017.001zm-.008 21.347c-5.157 0-9.36-4.202-9.36-9.36 0-5.157 4.203-9.36 9.36-9.36s9.36 4.203 9.36 9.36c0 5.158-4.203 9.36-9.36 9.36z"/>
+                <path d="M12.017 4.422L8.78 7.659l3.237 3.237 3.237-3.237z" />
+                <path d="M12.017 12.776l3.237 3.237-3.237 3.237-3.237-3.237z" />
+              </svg>
+            )}
           </button>
           
           <button
