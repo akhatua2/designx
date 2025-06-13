@@ -121,7 +121,7 @@ class OpenPRConfig(BaseModel):
     # Option to be used with open_pr: Skip action if there are already commits claiming
     # to fix the issue. Please only set this to False if you are sure the commits are
     # not fixes or if this is your own repository!
-    skip_if_commits_reference_issue: bool = True
+    skip_if_commits_reference_issue: bool = False
 
 
 class OpenPRHook(RunHook):
