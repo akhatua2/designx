@@ -793,11 +793,6 @@ async def run_sweagent(request: RunSWEAgentRequest):
             sys.path.insert(0, '/app/SWE-agent')
             
             from sweagent.run.run_single import RunSingleConfig, run_from_config
-            from sweagent.environment.swe_env import EnvironmentConfig
-            from sweagent.agent.agents import DefaultAgentConfig
-            from sweagent.agent.problem_statement import GithubIssue
-            from sweagent.agent.models import GenericAPIModelConfig
-            from pathlib import Path
             logger.info("✅ SWE-agent modules imported successfully")
         except ImportError as e:
             logger.error(f"❌ Failed to import SWE-agent modules: {str(e)}")
@@ -810,37 +805,37 @@ async def run_sweagent(request: RunSWEAgentRequest):
         try:
             logger.info("🔧 Creating SWE-agent configuration...")
             
-            # Create model config
-            model_config = GenericAPIModelConfig(
-                name="gpt-4.1",
-                per_instance_cost_limit=1.00
-            )
+            # Create configuration dictionary that mimics CLI arguments
+            config_dict = {
+                "agent": {
+                    "model": {
+                        "name": "gpt-4.1",
+                        "per_instance_cost_limit": 1.00
+                    }
+                },
+                "env": {
+                    "repo": {
+                        "github_url": request.repo_url,
+                        "type": "github"
+                    },
+                    "deployment": {
+                        "type": "modal",
+                        "image": "python:3.11"
+                    }
+                },
+                "problem_statement": {
+                    "github_url": request.issue_url,
+                    "type": "github"
+                },
+                "output_dir": "/app/trajectories"
+            }
             
-            # Create agent config
-            agent_config = DefaultAgentConfig(model=model_config)
+            logger.info(f"🔧 Configuration dictionary: {config_dict}")
             
-            # Create repository config
-            from sweagent.environment.repo import GithubRepoConfig
-            from swerex.deployment.config import ModalDeploymentConfig
-            repo_config = GithubRepoConfig(github_url=request.repo_url)
+            # Use RunSingleConfig.model_validate to create the config properly
+            config = RunSingleConfig.model_validate(config_dict)
             
-            # Create Modal deployment config
-            modal_deployment = ModalDeploymentConfig(image="python:3.11")
-            
-            # Create environment config
-            env_config = EnvironmentConfig(repo=repo_config, deployment=modal_deployment)
-            
-            # Create problem statement config
-            problem_statement_config = GithubIssue(github_url=request.issue_url)
-            
-            # Create the main config
-            config = RunSingleConfig(
-                agent=agent_config,
-                env=env_config,
-                problem_statement=problem_statement_config,
-                output_dir=Path("/app/trajectories")
-            )
-            
+            logger.info(f"🔧 Environment config deployment type: {type(config.env.deployment).__name__}")
             logger.info("✅ Configuration created successfully")
             
         except Exception as e:
