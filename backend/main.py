@@ -757,132 +757,51 @@ async def jira_auth_success(code: str = None, error: str = None):
 
 @app.post("/api/run-sweagent")
 async def run_sweagent(request: RunSWEAgentRequest):
-    """
-    Run SWE-agent using direct imports instead of subprocess
-    """
+    """Run SWE-agent on a GitHub issue"""
+    logger.info(f"🚀 Starting SWE-agent run for {request.repo_url}")
+    
     try:
-        logger.info("🚀 SWE-agent trigger requested:")
-        logger.info(f"   Repository: {request.repo_url}")
-        logger.info(f"   Issue: {request.issue_url}")
-        logger.info(f"   GitHub token provided: {'Yes' if request.github_token else 'No'}")
-        logger.info(f"   OpenAI API key configured: {'Yes' if settings.OPENAI_API_KEY else 'No'}")
-        
-        # Set up environment variables
-        env = os.environ.copy()
-        env.update({
-            "GITHUB_TOKEN": request.github_token,
-            "OPENAI_API_KEY": settings.OPENAI_API_KEY,
-        })
-        
-        # Update environment variables for the current process
-        os.environ["GITHUB_TOKEN"] = request.github_token
-        os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
-        
-        # Add Modal credentials for deployment
-        if hasattr(settings, 'MODAL_TOKEN_ID') and settings.MODAL_TOKEN_ID:
-            os.environ["MODAL_TOKEN_ID"] = settings.MODAL_TOKEN_ID
-        if hasattr(settings, 'MODAL_TOKEN_SECRET') and settings.MODAL_TOKEN_SECRET:
-            os.environ["MODAL_TOKEN_SECRET"] = settings.MODAL_TOKEN_SECRET
-        
-        logger.info("🔧 Environment variables updated")
-        
         # Import SWE-agent modules
-        try:
-            # Add SWE-agent to path (it's now in the same directory)
-            import sys
-            sys.path.insert(0, '/app/SWE-agent')
-            
-            from sweagent.run.run_single import RunSingleConfig, run_from_config
-            logger.info("✅ SWE-agent modules imported successfully")
-        except ImportError as e:
-            logger.error(f"❌ Failed to import SWE-agent modules: {str(e)}")
-            return {
-                "status": "error",
-                "message": f"Failed to import SWE-agent modules: {str(e)}"
-            }
+        import sys
+        sys.path.insert(0, str(SWE_AGENT_PATH))
         
-        # Create the configuration
-        try:
-            logger.info("🔧 Creating SWE-agent configuration...")
-            
-            # Create configuration dictionary that mimics CLI arguments
-            config_dict = {
-                "agent": {
-                    "model": {
-                        "name": "gpt-4.1",
-                        "per_instance_cost_limit": 1.00
-                    }
-                },
-                "env": {
-                    "repo": {
-                        "github_url": request.repo_url,
-                        "type": "github"
-                    },
-                    "deployment": {
-                        "type": "modal",
-                        "image": "python:3.11"
-                    }
-                },
-                "problem_statement": {
-                    "github_url": request.issue_url,
-                    "type": "github"
-                },
-                "output_dir": "/app/trajectories"
-            }
-            
-            logger.info(f"🔧 Configuration dictionary: {config_dict}")
-            
-            # Use RunSingleConfig.model_validate to create the config properly
-            config = RunSingleConfig.model_validate(config_dict)
-            
-            logger.info(f"🔧 Environment config deployment type: {type(config.env.deployment).__name__}")
-            logger.info("✅ Configuration created successfully")
-            
-        except Exception as e:
-            logger.error(f"❌ Failed to create configuration: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return {
-                "status": "error",
-                "message": f"Failed to create configuration: {str(e)}"
-            }
+        from sweagent.run.run_single import RunSingleConfig
+        from sweagent.run.common import BasicCLI
+        from sweagent.run.run_single import run_from_config
         
-        # Run SWE-agent in a background thread
-        import threading
-        import asyncio
+        # Create CLI arguments that mirror the working command
+        cli_args = [
+            "--agent.model.name=gpt-4.1",
+            "--agent.model.per_instance_cost_limit=1.00",
+            f"--env.repo.github_url={request.repo_url}",
+            f"--problem_statement.github_url={request.issue_url}",
+            "--env.deployment.type=modal",
+            "--env.deployment.image=python:3.11"
+        ]
         
-        def run_sweagent_task():
-            try:
-                logger.info("🚀 Starting SWE-agent run...")
-                run_from_config(config)
-                logger.info("✅ SWE-agent completed successfully")
-            except Exception as e:
-                logger.error(f"❌ SWE-agent run failed: {str(e)}")
-                import traceback
-                traceback.print_exc()
+        logger.info(f"🔧 CLI args: {cli_args}")
         
-        # Start the task in a background thread
-        thread = threading.Thread(target=run_sweagent_task, daemon=True)
-        thread.start()
+        # Set GitHub token environment variable
+        os.environ["GITHUB_TOKEN"] = request.github_token
         
-        return {
-            "status": "triggered", 
-            "message": "SWE-agent started successfully using direct imports",
-            "repo_url": request.repo_url,
-            "issue_url": request.issue_url,
-            "execution_method": "direct_import"
-        }
+        # Use the same CLI parsing approach as the sweagent command
+        basic_cli = BasicCLI(RunSingleConfig)
+        config = basic_cli.get_config(cli_args)
+        
+        logger.info(f"🔧 Created config with deployment type: {type(config.env.deployment).__name__}")
+        logger.info(f"🔧 Agent system template preview: {config.agent.templates.system_template[:100]}...")
+        
+        # Run SWE-agent with the parsed configuration
+        logger.info("🤖 Running SWE-agent...")
+        run_from_config(config)
+        
+        return {"status": "success", "message": "SWE-agent completed successfully"}
         
     except Exception as e:
-        logger.error(f"❌ Error in SWE-agent trigger: {str(e)}")
+        logger.error(f"❌ Error running SWE-agent: {str(e)}")
         import traceback
         traceback.print_exc()
-        
-        return {
-            "status": "error",
-            "message": f"Failed to trigger SWE-agent: {str(e)}",
-            "error_type": type(e).__name__
-        }
+        return {"status": "error", "message": f"Failed to run SWE-agent: {str(e)}"}
 
 if __name__ == "__main__":
     import uvicorn
