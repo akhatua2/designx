@@ -198,7 +198,7 @@ export class CommentModeManager {
     `
 
     // Create a rounded cutout area for the selected element
-    const padding = 8 // Add padding around the element for rounded effect
+    const padding = 8 // Add padding around the element
     const borderRadius = 12 // Rounded corners
     
     // Create the blurred background that covers everything
@@ -213,123 +213,33 @@ export class CommentModeManager {
       backdrop-filter: blur(2px);
     `
 
-    // Create a mask using radial-gradient for smooth rounded corners
-    const centerX = rect.left + rect.width / 2
-    const centerY = rect.top + rect.height / 2
-    const maskWidth = rect.width + (padding * 2)
-    const maskHeight = rect.height + (padding * 2)
-    
-    // Use CSS mask with rounded rectangle cutout
-    const maskImage = `
-      radial-gradient(
-        ellipse ${maskWidth/2}px ${maskHeight/2}px at ${centerX}px ${centerY}px,
-        transparent ${Math.min(maskWidth, maskHeight)/2 - borderRadius}px,
-        transparent ${Math.min(maskWidth, maskHeight)/2}px,
-        black ${Math.min(maskWidth, maskHeight)/2 + 1}px
-      )
-    `
-    
-    // Fallback to a simpler approach using mask-image with rounded rectangle
-    blurredBackground.style.maskImage = `
-      linear-gradient(black, black),
-      radial-gradient(
-        ${borderRadius}px at ${rect.left - padding + borderRadius}px ${rect.top - padding + borderRadius}px,
-        transparent ${borderRadius - 1}px,
-        black ${borderRadius}px
-      ),
-      radial-gradient(
-        ${borderRadius}px at ${rect.right + padding - borderRadius}px ${rect.top - padding + borderRadius}px,
-        transparent ${borderRadius - 1}px,
-        black ${borderRadius}px
-      ),
-      radial-gradient(
-        ${borderRadius}px at ${rect.right + padding - borderRadius}px ${rect.bottom + padding - borderRadius}px,
-        transparent ${borderRadius - 1}px,
-        black ${borderRadius}px
-      ),
-      radial-gradient(
-        ${borderRadius}px at ${rect.left - padding + borderRadius}px ${rect.bottom + padding - borderRadius}px,
-        transparent ${borderRadius - 1}px,
-        black ${borderRadius}px
-      )
-    `
-    
-    blurredBackground.style.maskComposite = 'subtract'
-    blurredBackground.style.webkitMaskComposite = 'source-out'
-    
-    // Simpler approach: use box-shadow with inset and border-radius on a pseudo-cutout
-    blurredBackground.style.maskImage = 'none'
-    
-    // Create cutout using box-shadow technique
+    // Calculate cutout dimensions
     const cutoutX = rect.left - padding
     const cutoutY = rect.top - padding
     const cutoutWidth = rect.width + (padding * 2)
     const cutoutHeight = rect.height + (padding * 2)
-    
-    blurredBackground.style.boxShadow = `
-      0 0 0 ${cutoutY}px rgba(0, 0, 0, 0.3),
-      0 0 0 ${cutoutX}px rgba(0, 0, 0, 0.3),
-      ${cutoutWidth}px 0 0 ${cutoutX}px rgba(0, 0, 0, 0.3),
-      0 ${cutoutHeight}px 0 ${cutoutY}px rgba(0, 0, 0, 0.3)
-    `
-    
-    // Reset and use a clean approach with multiple divs
-    blurredBackground.style.boxShadow = 'none'
-    blurredBackground.style.background = 'none'
-    
-    // Top section
-    const topSection = document.createElement('div')
-    topSection.style.cssText = `
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: ${cutoutY}px;
-      background: rgba(0, 0, 0, 0.3);
-      backdrop-filter: blur(2px);
-    `
-    
-    // Bottom section  
-    const bottomSection = document.createElement('div')
-    bottomSection.style.cssText = `
-      position: absolute;
-      top: ${cutoutY + cutoutHeight}px;
-      left: 0;
-      width: 100%;
-      height: calc(100% - ${cutoutY + cutoutHeight}px);
-      background: rgba(0, 0, 0, 0.3);
-      backdrop-filter: blur(2px);
-    `
-    
-    // Left section
-    const leftSection = document.createElement('div')
-    leftSection.style.cssText = `
-      position: absolute;
-      top: ${cutoutY}px;
-      left: 0;
-      width: ${cutoutX}px;
-      height: ${cutoutHeight}px;
-      background: rgba(0, 0, 0, 0.3);
-      backdrop-filter: blur(2px);
-    `
-    
-    // Right section
-    const rightSection = document.createElement('div')
-    rightSection.style.cssText = `
-      position: absolute;
-      top: ${cutoutY}px;
-      left: ${cutoutX + cutoutWidth}px;
-      width: calc(100% - ${cutoutX + cutoutWidth}px);
-      height: ${cutoutHeight}px;
-      background: rgba(0, 0, 0, 0.3);
-      backdrop-filter: blur(2px);
-    `
 
-    this.overlayElement.appendChild(topSection)
-    this.overlayElement.appendChild(bottomSection)
-    this.overlayElement.appendChild(leftSection)
-    this.overlayElement.appendChild(rightSection)
+    // Use CSS mask to create rounded cutout
+    const maskSVG = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
+        <defs>
+          <mask id="cutout">
+            <rect width="100%" height="100%" fill="white"/>
+            <rect x="${cutoutX}" y="${cutoutY}" width="${cutoutWidth}" height="${cutoutHeight}" 
+                  rx="${borderRadius}" ry="${borderRadius}" fill="black"/>
+          </mask>
+        </defs>
+        <rect width="100%" height="100%" fill="white" mask="url(#cutout)"/>
+      </svg>
+    `
     
+    const svgDataUrl = `data:image/svg+xml;base64,${btoa(maskSVG)}`
+    blurredBackground.style.maskImage = `url("${svgDataUrl}")`
+    blurredBackground.style.webkitMaskImage = `url("${svgDataUrl}")`
+    blurredBackground.style.maskSize = '100% 100%'
+    blurredBackground.style.webkitMaskSize = '100% 100%'
+
+    this.overlayElement.appendChild(blurredBackground)
     document.body.appendChild(this.overlayElement)
   }
 
