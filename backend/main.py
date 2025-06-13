@@ -5,7 +5,6 @@ import httpx
 from pydantic import BaseModel
 from config import settings
 import os
-import subprocess
 import logging
 
 # Configure logging for Cloud Run
@@ -336,7 +335,7 @@ async def exchange_slack_token(request: SlackTokenRequest):
         
         logger.info(f"🔧 Slack Client ID: {slack_client_id}")
         logger.info(f"🔧 Slack Client Secret configured: {'Yes' if slack_client_secret else 'No'}")
-        logger.info(f"�� Slack Redirect URI: {slack_redirect_uri}")
+        logger.info(f"🔧 Slack Redirect URI: {slack_redirect_uri}")
         
         if not slack_client_id or not slack_client_secret:
             logger.error("❌ Slack credentials not configured")
@@ -541,7 +540,7 @@ async def exchange_jira_token(request: JiraTokenRequest):
     Exchange Jira OAuth authorization code for access token
     """
     logger.info("🔄 Received Jira token exchange request")
-    logger.info(f"�� Authorization code length: {len(request.code)}")
+    logger.info(f"🔧 Authorization code length: {len(request.code)}")
     
     try:
         jira_client_id = settings.JIRA_CLIENT_ID if hasattr(settings, 'JIRA_CLIENT_ID') else None
@@ -759,7 +758,7 @@ async def jira_auth_success(code: str = None, error: str = None):
 @app.post("/api/run-sweagent")
 async def run_sweagent(request: RunSWEAgentRequest):
     """
-    Run SWE-agent command (it will deploy itself to Modal)
+    Run SWE-agent using direct imports instead of subprocess
     """
     try:
         logger.info("🚀 SWE-agent trigger requested:")
@@ -767,176 +766,99 @@ async def run_sweagent(request: RunSWEAgentRequest):
         logger.info(f"   Issue: {request.issue_url}")
         logger.info(f"   GitHub token provided: {'Yes' if request.github_token else 'No'}")
         logger.info(f"   OpenAI API key configured: {'Yes' if settings.OPENAI_API_KEY else 'No'}")
-        logger.info(f"   Modal token configured: {'Yes' if settings.MODAL_TOKEN_ID else 'No'}")
-        
-        # Check if sweagent command exists
-        import shutil
-        sweagent_path = shutil.which("sweagent")
-        logger.info(f"🔍 sweagent command found at: {sweagent_path}")
-        
-        if not sweagent_path:
-            logger.error("❌ sweagent command not found in PATH")
-            return {
-                "status": "error",
-                "message": "sweagent command not found in PATH"
-            }
         
         # Set up environment variables
         env = os.environ.copy()
         env.update({
             "GITHUB_TOKEN": request.github_token,
             "OPENAI_API_KEY": settings.OPENAI_API_KEY,
-            "MODAL_TOKEN_ID": settings.MODAL_TOKEN_ID,
-            "MODAL_TOKEN_SECRET": settings.MODAL_TOKEN_SECRET
         })
-        logger.info(f"🔧 Environment variables set: {env}")
         
-        # Build the SWE-agent command
-        # Switch to Docker deployment due to Modal hanging issue (#1204)
-        cmd = [
-            "sweagent", "run",
-            "--agent.model.name=gpt-4o-mini",
-            "--config", "config/default.yaml",
-            # "--env.deployment.type=modal",  # Disabled due to Modal hanging issue
-            "--agent.model.per_instance_cost_limit=1.00",
-            f"--env.repo.github_url={request.repo_url}",
-            f"--problem_statement.github_url={request.issue_url}"
-        ]
+        # Update environment variables for the current process
+        os.environ["GITHUB_TOKEN"] = request.github_token
+        os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
         
-        logger.info(f"Command: {cmd}")
+        logger.info("🔧 Environment variables updated")
         
-        logger.info(f"🚀 Executing command: {' '.join(cmd)}")
-        logger.info(f"🔧 Environment variables set: GITHUB_TOKEN, OPENAI_API_KEY, MODAL_TOKEN_ID, MODAL_TOKEN_SECRET")
-        logger.info(f"🔧 Working directory: /app/SWE-agent")
-        
-        # First, let's try to run sweagent --help to see if it works
+        # Import SWE-agent modules
         try:
-            help_result = subprocess.run(
-                ["sweagent", "--help"],
-                capture_output=True,
-                text=True,
-                timeout=30,
-                cwd="/app/SWE-agent"
+            from sweagent.run.run_single import RunSingleConfig, run_from_config
+            from sweagent.environment.swe_env import EnvironmentConfig
+            from sweagent.agent.agents import DefaultAgentConfig
+            from sweagent.agent.problem_statement import GithubIssue
+            from sweagent.agent.models import GenericAPIModelConfig
+            from pathlib import Path
+            logger.info("✅ SWE-agent modules imported successfully")
+        except ImportError as e:
+            logger.error(f"❌ Failed to import SWE-agent modules: {str(e)}")
+            return {
+                "status": "error",
+                "message": f"Failed to import SWE-agent modules: {str(e)}"
+            }
+        
+        # Create the configuration
+        try:
+            logger.info("🔧 Creating SWE-agent configuration...")
+            
+            # Create model config
+            model_config = GenericAPIModelConfig(
+                name="gpt-4.1",
+                per_instance_cost_limit=1.00
             )
-            logger.info(f"📋 sweagent --help exit code: {help_result.returncode}")
-            if help_result.stdout:
-                logger.info(f"📋 sweagent --help stdout: {help_result.stdout[:500]}...")
-            if help_result.stderr:
-                logger.warning(f"⚠️ sweagent --help stderr: {help_result.stderr[:500]}...")
+            
+            # Create agent config
+            agent_config = DefaultAgentConfig(model=model_config)
+            
+            # Create environment config
+            env_config = EnvironmentConfig()
+            env_config.repo.github_url = request.repo_url
+            
+            # Create problem statement config
+            problem_statement_config = GithubIssue(github_url=request.issue_url)
+            
+            # Create the main config
+            config = RunSingleConfig(
+                agent=agent_config,
+                env=env_config,
+                problem_statement=problem_statement_config,
+                output_dir=Path("/app/trajectories")
+            )
+            
+            logger.info("✅ Configuration created successfully")
+            
         except Exception as e:
-            logger.error(f"❌ Error running sweagent --help: {str(e)}")
+            logger.error(f"❌ Failed to create configuration: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return {
+                "status": "error",
+                "message": f"Failed to create configuration: {str(e)}"
+            }
         
-        # Run the actual command with better monitoring
-        logger.info("🚀 Starting SWE-agent process...")
-        process = subprocess.Popen(
-            cmd,
-            env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,  # Separate stderr
-            text=True,
-            bufsize=0,  # Unbuffered
-            universal_newlines=True,
-            cwd="/app/SWE-agent"  # Run from SWE-agent directory
-        )
-        
-        logger.info(f"✅ SWE-agent process started with PID: {process.pid}")
-        
-        # Start a background task to monitor the process
-        import asyncio
+        # Run SWE-agent in a background thread
         import threading
-        import time
+        import asyncio
         
-        def monitor_process():
+        def run_sweagent_task():
             try:
-                logger.info("🔍 Starting process monitor...")
-                
-                # Monitor for a few seconds to capture initial output
-                start_time = time.time()
-                stdout_lines = []
-                stderr_lines = []
-                last_output_time = start_time
-                
-                # Read initial output for 60 seconds (increased timeout)
-                while time.time() - start_time < 60:
-                    # Check if process is still running
-                    if process.poll() is not None:
-                        logger.info(f"🏁 Process terminated early with return code: {process.returncode}")
-                        break
-                    
-                    # Read stdout
-                    output_found = False
-                    try:
-                        line = process.stdout.readline()
-                        if line:
-                            line = line.strip()
-                            stdout_lines.append(line)
-                            logger.info(f"📄 SWE-agent STDOUT: {line}")
-                            last_output_time = time.time()
-                            output_found = True
-                    except:
-                        pass
-                    
-                    # Read stderr
-                    try:
-                        line = process.stderr.readline()
-                        if line:
-                            line = line.strip()
-                            stderr_lines.append(line)
-                            logger.warning(f"⚠️ SWE-agent STDERR: {line}")
-                            last_output_time = time.time()
-                            output_found = True
-                    except:
-                        pass
-                    
-                    # Check if we haven't seen output for 30 seconds
-                    if time.time() - last_output_time > 30:
-                        logger.warning("⚠️ No output for 30 seconds - process may be hanging")
-                        logger.warning("🔍 Checking if this is a Modal deployment issue...")
-                        
-                        # Try to terminate the process
-                        try:
-                            process.terminate()
-                            logger.info("🛑 Terminated hanging process")
-                        except:
-                            pass
-                        break
-                    
-                    if not output_found:
-                        time.sleep(0.1)
-                
-                # After monitoring period, check final status
-                if process.poll() is None:
-                    logger.warning("⏰ Process still running after monitoring period")
-                    logger.warning("🔍 This might be normal for long-running SWE-agent tasks")
-                else:
-                    logger.info(f"🏁 Final process status: {process.returncode}")
-                    
-                    # Get any remaining output
-                    try:
-                        remaining_stdout, remaining_stderr = process.communicate(timeout=5)
-                        if remaining_stdout:
-                            logger.info(f"📄 Final STDOUT: {remaining_stdout}")
-                        if remaining_stderr:
-                            logger.warning(f"⚠️ Final STDERR: {remaining_stderr}")
-                    except:
-                        pass
-                
+                logger.info("🚀 Starting SWE-agent run...")
+                run_from_config(config)
+                logger.info("✅ SWE-agent completed successfully")
             except Exception as e:
-                logger.error(f"❌ Error monitoring SWE-agent process: {str(e)}")
+                logger.error(f"❌ SWE-agent run failed: {str(e)}")
                 import traceback
                 traceback.print_exc()
         
-        # Start monitoring in a separate thread
-        monitor_thread = threading.Thread(target=monitor_process, daemon=True)
-        monitor_thread.start()
+        # Start the task in a background thread
+        thread = threading.Thread(target=run_sweagent_task, daemon=True)
+        thread.start()
         
         return {
             "status": "triggered", 
-            "message": "SWE-agent started successfully",
+            "message": "SWE-agent started successfully using direct imports",
             "repo_url": request.repo_url,
             "issue_url": request.issue_url,
-            "process_id": process.pid,
-            "sweagent_path": sweagent_path
+            "execution_method": "direct_import"
         }
         
     except Exception as e:
