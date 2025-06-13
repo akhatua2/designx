@@ -19,13 +19,37 @@ class GoogleTokenResponse(BaseModel):
 
 async def exchange_google_token(request: GoogleTokenRequest) -> GoogleTokenResponse:
     """
-    Exchange Google ID token for our JWT token and user info
+    Exchange Google authorization code for our JWT token and user info
     """
-    logger.info("🔄 Received Google token exchange request")
+    logger.info("🔄 Received Google authorization code exchange request")
     
     try:
-        # Verify Google token and get user info
-        user_info = AuthService.verify_google_token(request.token)
+        # Exchange authorization code for Google ID token
+        async with httpx.AsyncClient() as client:
+            token_response = await client.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "code": request.code,
+                    "client_id": settings.GOOGLE_CLIENT_ID,
+                    "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                    "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+                    "grant_type": "authorization_code"
+                }
+            )
+            
+            if not token_response.is_success:
+                logger.error(f"❌ Failed to exchange code for token: {token_response.text}")
+                raise HTTPException(status_code=400, detail="Failed to exchange authorization code")
+            
+            token_data = token_response.json()
+            id_token = token_data.get("id_token")
+            
+            if not id_token:
+                logger.error("❌ No ID token received from Google")
+                raise HTTPException(status_code=400, detail="No ID token received from Google")
+        
+        # Verify Google ID token and get user info
+        user_info = AuthService.verify_google_token(id_token)
         
         # Create or update user in database
         user_data = AuthService.create_or_update_user(user_info)
@@ -39,7 +63,7 @@ async def exchange_google_token(request: GoogleTokenRequest) -> GoogleTokenRespo
             'token_type': 'bearer'
         }
         
-        logger.info("✅ Google token exchange successful")
+        logger.info("✅ Google authorization code exchange successful")
         return GoogleTokenResponse(
             access_token=auth_result['token'],
             token_type=auth_result['token_type'],
@@ -49,7 +73,7 @@ async def exchange_google_token(request: GoogleTokenRequest) -> GoogleTokenRespo
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Unexpected error in Google token exchange: {str(e)}")
+        logger.error(f"❌ Unexpected error in Google code exchange: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 async def google_oauth_callback(code: str = None, error: str = None) -> HTMLResponse:
