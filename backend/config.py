@@ -47,6 +47,16 @@ class Settings(BaseSettings):
     MODAL_TOKEN_ID: str = ""
     MODAL_TOKEN_SECRET: str = ""
 
+    # Supabase settings
+    SUPABASE_URL: str = "https://nkqdhckrtbhrvjpdadmi.supabase.co"
+    SUPABASE_KEY: str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5rcWRoY2tydGJocnZqcGRhZG1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3NDkzOTUsImV4cCI6MjA2NTMyNTM5NX0.fNk4oIAafbMeOtAghmjxRX9qisg7JFTquxJE00LvZOo"
+    SUPABASE_SERVICE_KEY: str = ""  # Add this to .env for admin operations
+
+    # Google OAuth settings
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "https://designx-705035175306.us-central1.run.app/api/google/callback"
+
     class Config:
         env_file = ".env"
         case_sensitive = True

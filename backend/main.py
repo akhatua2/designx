@@ -19,10 +19,15 @@ from jira_integration import (
     JiraTokenRequest, JiraTokenResponse,
     exchange_jira_token, jira_oauth_callback, jira_auth_success
 )
+from google_integration import (
+    GoogleTokenRequest, GoogleTokenResponse,
+    exchange_google_token, google_oauth_callback, google_auth_success, get_google_user
+)
 from sweagent_service import (
     RunSWEAgentRequest, JobResponse, JobStatusResponse,
     sweagent_service, websocket_job_status
 )
+from auth_service import get_current_user, get_current_user_optional
 
 # Configure logging for Cloud Run
 logging.basicConfig(
@@ -104,6 +109,35 @@ async def jira_callback(code: str = None, error: str = None):
 @app.get("/auth/jira/success", response_class=HTMLResponse)
 async def jira_success(code: str = None, error: str = None):
     return await jira_auth_success(code, error)
+
+# =================== Google OAuth Routes ===================
+@app.post("/api/google/exchange", response_model=GoogleTokenResponse)
+async def google_token_exchange(request: GoogleTokenRequest):
+    return await exchange_google_token(request)
+
+@app.get("/api/google/callback", response_class=HTMLResponse)
+async def google_callback(code: str = None, error: str = None):
+    return await google_oauth_callback(code, error)
+
+@app.get("/auth/google/success", response_class=HTMLResponse)
+async def google_success(code: str = None, error: str = None):
+    return await google_auth_success(code, error)
+
+@app.get("/api/google/user")
+async def google_user(authorization: str):
+    return await get_google_user(authorization)
+
+# =================== User Management Routes ===================
+@app.get("/api/user/me")
+async def get_current_user_info(current_user: dict = get_current_user):
+    """Get current authenticated user information"""
+    return current_user
+
+@app.post("/api/user/logout")
+async def logout_user(current_user: dict = get_current_user):
+    """Logout current user"""
+    # With JWT tokens, logout is handled client-side by removing the token
+    return {"success": True, "message": "Logged out successfully"}
 
 # =================== SWE-Agent Job Routes ===================
 @app.post("/api/run-sweagent", response_model=JobResponse)
