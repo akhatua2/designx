@@ -816,6 +816,8 @@ async def run_sweagent(request: RunSWEAgentRequest):
             # Create environment config
             env_config = EnvironmentConfig()
             env_config.repo.github_url = request.repo_url
+            # Configure for Modal deployment
+            env_config.deployment.type = "modal"
             
             # Create problem statement config
             problem_statement_config = GithubIssue(github_url=request.issue_url)
