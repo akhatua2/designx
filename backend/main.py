@@ -757,51 +757,145 @@ async def jira_auth_success(code: str = None, error: str = None):
 
 @app.post("/api/run-sweagent")
 async def run_sweagent(request: RunSWEAgentRequest):
-    """Run SWE-agent on a GitHub issue"""
+    """Run SWE-agent on a GitHub issue using CLI command"""
     logger.info(f"🚀 Starting SWE-agent run for {request.repo_url}")
     
     try:
-        # Import SWE-agent modules
-        import sys
-        sys.path.insert(0, '/app/SWE-agent')
+        # Set environment variables
+        env = os.environ.copy()
+        env["GITHUB_TOKEN"] = request.github_token
         
-        from sweagent.run.run_single import RunSingleConfig
-        from sweagent.run.common import BasicCLI
-        from sweagent.run.run_single import run_from_config
+        # Add OpenAI API key
+        if hasattr(settings, 'OPENAI_API_KEY') and settings.OPENAI_API_KEY:
+            env["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
+            logger.info(f"🔑 OpenAI API key set: {settings.OPENAI_API_KEY[:10]}...")
+        else:
+            logger.warning("⚠️ No OpenAI API key found in settings")
         
-        # Create CLI arguments that mirror the working command
-        cli_args = [
-            "--agent.model.name=gpt-4.1",
+        # Add Modal credentials for deployment
+        if hasattr(settings, 'MODAL_TOKEN_ID') and settings.MODAL_TOKEN_ID:
+            env["MODAL_TOKEN_ID"] = settings.MODAL_TOKEN_ID
+            logger.info(f"🔑 Modal Token ID set: {settings.MODAL_TOKEN_ID[:10]}...")
+        else:
+            logger.warning("⚠️ No Modal Token ID found in settings")
+            
+        if hasattr(settings, 'MODAL_TOKEN_SECRET') and settings.MODAL_TOKEN_SECRET:
+            env["MODAL_TOKEN_SECRET"] = settings.MODAL_TOKEN_SECRET
+            logger.info(f"🔑 Modal Token Secret set: {settings.MODAL_TOKEN_SECRET[:10]}...")
+        else:
+            logger.warning("⚠️ No Modal Token Secret found in settings")
+        
+        # Check if running in Docker vs local and find the correct SWE-agent path
+        possible_paths = [
+            '/app/SWE-agent',  # Docker
+            'SWE-agent',  # Direct from backend directory
+            'backend/SWE-agent',  # From parent directory
+            os.path.join(os.path.dirname(__file__), 'SWE-agent')  # Relative to main.py
+        ]
+        
+        swe_agent_path = None
+        for path in possible_paths:
+            if os.path.exists(path):
+                swe_agent_path = path
+                break
+        
+        if not swe_agent_path:
+            raise Exception(f"SWE-agent directory not found. Tried: {possible_paths}")
+        
+        # Build the CLI command exactly as you specified from the docs
+        cmd = [
+            "sweagent", "run",
+            "--agent.model.name=gpt-4.1", 
+            "--config", "config/default.yaml",
             "--agent.model.per_instance_cost_limit=1.00",
             f"--env.repo.github_url={request.repo_url}",
             f"--problem_statement.github_url={request.issue_url}",
-            "--env.deployment.type=modal",
-            "--env.deployment.image=python:3.11"
+            "--env.deployment.type=modal"
         ]
         
-        logger.info(f"🔧 CLI args: {cli_args}")
+        logger.info(f"🤖 Running SWE-agent from {swe_agent_path}")
+        logger.info(f"🤖 Command: {' '.join(cmd)}")
         
-        # Set GitHub token environment variable
-        os.environ["GITHUB_TOKEN"] = request.github_token
+        # Run the command from SWE-agent root directory  
+        import subprocess
+        import time
         
-        # Use the same CLI parsing approach as the sweagent command
-        basic_cli = BasicCLI(RunSingleConfig)
-        config = basic_cli.get_config(cli_args)
+        logger.info("🚀 Starting SWE-agent...")
+        process = subprocess.Popen(
+            cmd,
+            cwd=swe_agent_path,  # This is critical - run from SWE-agent root
+            env=env,  # Use our custom environment with all the tokens
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
         
-        logger.info(f"🔧 Created config with deployment type: {type(config.env.deployment).__name__}")
-        logger.info(f"🔧 Agent system template preview: {config.agent.templates.system_template[:100]}...")
+        # Wait and check if it's actually running
+        time.sleep(10)
         
-        # Run SWE-agent with the parsed configuration
-        logger.info("🤖 Running SWE-agent...")
-        run_from_config(config)
+        if process.poll() is not None:
+            # Process has already terminated
+            stdout, stderr = process.communicate()
+            logger.error(f"❌ SWE-agent terminated after startup (exit code: {process.returncode})")
+            logger.error(f"STDOUT: {stdout[:1000]}")  
+            logger.error(f"STDERR: {stderr[:1000]}")  
+            return {"status": "error", "message": f"SWE-agent terminated (exit code {process.returncode}): {stderr[:300]}"}
         
-        return {"status": "success", "message": "SWE-agent completed successfully"}
+        # Process is still running after 10 seconds, it's probably working
+        logger.info(f"✅ SWE-agent confirmed running with PID: {process.pid}")
+        return {"status": "started", "message": f"SWE-agent started successfully with PID {process.pid}", "pid": process.pid}
         
+        # Note: Commented out the wait logic since SWE-agent runs for a long time
+        # result = process.communicate(timeout=3600)
+        # if process.returncode == 0:
+        #     return {"status": "success", "message": "SWE-agent completed successfully"}
+        # else:
+        #     return {"status": "error", "message": f"SWE-agent failed: {result[1]}"}
+
     except Exception as e:
         logger.error(f"❌ Error running SWE-agent: {str(e)}")
         import traceback
         traceback.print_exc()
         return {"status": "error", "message": f"Failed to run SWE-agent: {str(e)}"}
+
+
+def run_sweagent_direct(repo_url: str, issue_url: str, github_token: str) -> dict:
+    """
+    Direct function to run SWE-agent without FastAPI overhead.
+    
+    Args:
+        repo_url: GitHub repository URL (e.g., "https://github.com/owner/repo")
+        issue_url: GitHub issue URL (e.g., "https://github.com/owner/repo/issues/1")
+        github_token: GitHub personal access token
+        
+    Returns:
+        dict: Status and message indicating success or failure
+        
+    Example:
+        result = run_sweagent_direct(
+            repo_url="https://github.com/akhatua2/wikifix",
+            issue_url="https://github.com/akhatua2/wikifix/issues/5",
+            github_token="ghp_xxxxxxxxxxxx"
+        )
+        print(result)
+    """
+    # Create request object
+    request = RunSWEAgentRequest(
+        repo_url=repo_url,
+        issue_url=issue_url,
+        github_token=github_token
+    )
+    
+    # Call the async function synchronously
+    import asyncio
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    return loop.run_until_complete(run_sweagent(request))
+
 
 if __name__ == "__main__":
     import uvicorn
