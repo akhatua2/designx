@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, WebSocket
+from fastapi import FastAPI, HTTPException, WebSocket, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, Response
 from config import settings
@@ -129,12 +129,12 @@ async def google_user(authorization: str):
 
 # =================== User Management Routes ===================
 @app.get("/api/user/me")
-async def get_current_user_info(current_user: dict = get_current_user):
+async def get_current_user_info(current_user: dict = Depends(get_current_user)):
     """Get current authenticated user information"""
     return current_user
 
 @app.post("/api/user/logout")
-async def logout_user(current_user: dict = get_current_user):
+async def logout_user(current_user: dict = Depends(get_current_user)):
     """Logout current user"""
     # With JWT tokens, logout is handled client-side by removing the token
     return {"success": True, "message": "Logged out successfully"}
