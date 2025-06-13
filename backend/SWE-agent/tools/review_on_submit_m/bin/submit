@@ -8,13 +8,27 @@ import os
 import io
 
 try:
-    sys.path.insert(0, str(Path(__file__).parent.parent.parent / "registry" / "lib"))
+    # Add the correct path to the registry module
+    registry_lib_path = Path(__file__).parent.parent.parent / "registry" / "lib"
+    sys.path.insert(0, str(registry_lib_path))
     from registry import registry
 except ImportError:
-    # Simple fallback - the task is already done anyway
-    class Registry(dict):
-        def get(self, key, default=None): return default
-    registry = Registry()
+    try:
+        # Fallback: try absolute path from tools directory
+        tools_path = Path(__file__).parent.parent.parent
+        registry_lib_path = tools_path / "registry" / "lib"
+        sys.path.insert(0, str(registry_lib_path))
+        from registry import registry
+    except ImportError:
+        # Final fallback: create a mock registry
+        class EnvRegistry:
+            def get(self, key, default=None): 
+                return os.getenv(key, default)
+            def __getitem__(self, key): 
+                return os.environ[key]
+            def __setitem__(self, key, value): 
+                os.environ[key] = str(value)
+        registry = EnvRegistry()
 
 
 def main() -> None:
