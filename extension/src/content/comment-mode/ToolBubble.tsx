@@ -108,74 +108,109 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
     return firstFont
   }
 
-  // Calculate position based on selection type - position to the right or left
+  // Smart positioning that avoids CommentBubble and stays in viewport
   const getPosition = () => {
-    const bubbleWidth = 320 // Wider to accommodate design properties
-    const spacing = 20 // Space between selected element and bubble
+    const bubbleWidth = 300
+    const bubbleHeight = 400 // Estimated height for collision detection
+    const spacing = 20
+    const viewportPadding = 10
     
-    if (selectedElement.type === 'element' && selectedElement.element) {
-      const rect = selectedElement.element.getBoundingClientRect()
-      const spaceOnRight = window.innerWidth - (rect.right + spacing + bubbleWidth)
-      const spaceOnLeft = rect.left - spacing - bubbleWidth
-      
-      // Prefer right side, fall back to left if not enough space
-      if (spaceOnRight >= 0) {
-        return {
-          top: rect.top + (rect.height / 2) - 50, // Center vertically on element
-          left: rect.right + spacing, // Position to the right with spacing
-          side: 'right' as const
-        }
-      } else if (spaceOnLeft >= 0) {
-        return {
-          top: rect.top + (rect.height / 2) - 50, // Center vertically on element
-          left: rect.left - spacing - bubbleWidth, // Position to the left with spacing
-          side: 'left' as const
-        }
-      } else {
-        // Fallback: position on right but constrain to viewport
-        return {
-          top: rect.top + (rect.height / 2) - 50,
-          left: Math.max(10, window.innerWidth - bubbleWidth - 20),
-          side: 'right' as const
-        }
+    // CommentBubble position (fixed at bottom-right)
+    const commentBubbleRect = {
+      left: window.innerWidth - 360 - 20, // 360px width + 20px right margin
+      top: window.innerHeight - 400 - 72, // Estimated height + 72px bottom margin
+      width: 360,
+      height: 400
+    }
+    
+    const getElementRect = () => {
+      if (selectedElement.type === 'element' && selectedElement.element) {
+        return selectedElement.element.getBoundingClientRect()
+      } else if (selectedElement.type === 'area' && selectedElement.area) {
+        const area = selectedElement.area
+        return { left: area.x, top: area.y, right: area.x + area.width, bottom: area.y + area.height, width: area.width, height: area.height }
       }
-    } else if (selectedElement.type === 'area' && selectedElement.area) {
-      const area = selectedElement.area
-      const spaceOnRight = window.innerWidth - (area.x + area.width + spacing + bubbleWidth)
-      const spaceOnLeft = area.x - spacing - bubbleWidth
+      return { left: 100, top: 100, right: 200, bottom: 200, width: 100, height: 100 }
+    }
+    
+    const elementRect = getElementRect()
+    
+    // Check if two rectangles overlap
+    const rectsOverlap = (rect1: any, rect2: any) => {
+      return !(rect1.right < rect2.left || 
+               rect1.left > rect2.right || 
+               rect1.bottom < rect2.top || 
+               rect1.top > rect2.bottom)
+    }
+    
+    // Try different positions in order of preference
+    const positions = [
+      // Right side of element
+      {
+        top: elementRect.top + (elementRect.height / 2) - (bubbleHeight / 2),
+        left: elementRect.right + spacing,
+        side: 'right' as const
+      },
+      // Left side of element
+      {
+        top: elementRect.top + (elementRect.height / 2) - (bubbleHeight / 2),
+        left: elementRect.left - spacing - bubbleWidth,
+        side: 'left' as const
+      },
+      // Above element
+      {
+        top: elementRect.top - spacing - bubbleHeight,
+        left: elementRect.left + (elementRect.width / 2) - (bubbleWidth / 2),
+        side: 'top' as const
+      },
+      // Below element
+      {
+        top: elementRect.bottom + spacing,
+        left: elementRect.left + (elementRect.width / 2) - (bubbleWidth / 2),
+        side: 'bottom' as const
+      }
+    ]
+    
+    // Find the first position that fits in viewport and doesn't overlap CommentBubble
+    for (const pos of positions) {
+      // Check viewport bounds
+      const fitsInViewport = 
+        pos.left >= viewportPadding &&
+        pos.left + bubbleWidth <= window.innerWidth - viewportPadding &&
+        pos.top >= viewportPadding &&
+        pos.top + bubbleHeight <= window.innerHeight - viewportPadding
       
-      // Prefer right side, fall back to left if not enough space
-      if (spaceOnRight >= 0) {
-        return {
-          top: area.y + (area.height / 2) - 50, // Center vertically on area
-          left: area.x + area.width + spacing, // Position to the right with spacing
-          side: 'right' as const
+      if (fitsInViewport) {
+        // Check if it overlaps with CommentBubble
+        const toolBubbleRect = {
+          left: pos.left,
+          top: pos.top,
+          right: pos.left + bubbleWidth,
+          bottom: pos.top + bubbleHeight
         }
-      } else if (spaceOnLeft >= 0) {
-        return {
-          top: area.y + (area.height / 2) - 50, // Center vertically on area
-          left: area.x - spacing - bubbleWidth, // Position to the left with spacing
-          side: 'left' as const
-        }
-      } else {
-        // Fallback: position on right but constrain to viewport
-        return {
-          top: area.y + (area.height / 2) - 50,
-          left: Math.max(10, window.innerWidth - bubbleWidth - 20),
-          side: 'right' as const
+        
+        if (!rectsOverlap(toolBubbleRect, commentBubbleRect)) {
+          return pos
         }
       }
     }
-    return { top: 100, left: 100, side: 'right' as const } // Fallback position
+    
+    // Fallback: position in top-left area, away from CommentBubble
+    return {
+      top: viewportPadding,
+      left: viewportPadding,
+      side: 'fallback' as const
+    }
   }
 
   const position = getPosition()
 
   const bubbleStyles = {
     position: 'fixed' as const,
-    top: `${Math.max(10, Math.min(window.innerHeight - 400, position.top))}px`, // Keep within viewport vertically
+    top: `${position.top}px`,
     left: `${position.left}px`,
     width: '300px',
+    maxHeight: '400px', // Prevent it from getting too tall
     borderRadius: '12px',
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
     backdropFilter: 'blur(12px)',
@@ -184,7 +219,7 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
     boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
     color: 'white',
     padding: '10px',
-    zIndex: 10001, // Higher than overlay
+    zIndex: 10001, // Higher than CommentBubble (10000) and overlay
     animation: 'slideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
     pointerEvents: 'auto' as const,
     overflow: 'hidden',
@@ -250,11 +285,21 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
           @keyframes slideIn {
             from {
               opacity: 0;
-              transform: translateX(${position.side === 'right' ? '10px' : '-10px'});
+              transform: ${
+                position.side === 'right' ? 'translateX(10px)' :
+                position.side === 'left' ? 'translateX(-10px)' :
+                position.side === 'top' ? 'translateY(-10px)' :
+                position.side === 'bottom' ? 'translateY(10px)' :
+                'scale(0.95)'
+              };
             }
             to {
               opacity: 1;
-              transform: translateX(0);
+              transform: ${
+                position.side === 'right' || position.side === 'left' ? 'translateX(0)' :
+                position.side === 'top' || position.side === 'bottom' ? 'translateY(0)' :
+                'scale(1)'
+              };
             }
           }
           
