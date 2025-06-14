@@ -13,6 +13,8 @@ export const usePropertyHandlers = (
   const [currentBackgroundColor, setCurrentBackgroundColor] = React.useState<string>('')
   const [currentPadding, setCurrentPadding] = React.useState<string>('')
   const [currentBorderRadius, setCurrentBorderRadius] = React.useState<string>('')
+  const [currentlyEditing, setCurrentlyEditing] = React.useState<HTMLElement | null>(null)
+  const [originalContent, setOriginalContent] = React.useState<string>('')
 
   // Initialize state when element changes
   React.useEffect(() => {
@@ -27,8 +29,130 @@ export const usePropertyHandlers = (
       setCurrentBackgroundColor(rgbToHex(computedStyle.backgroundColor))
       setCurrentPadding(computedStyle.paddingTop.replace('px', ''))
       setCurrentBorderRadius(computedStyle.borderRadius.replace('px', ''))
+      
+      // Stop any existing editing when element changes
+      if (currentlyEditing) {
+        finishTextEdit(true)
+      }
     }
   }, [selectedElement])
+
+  const isTextElement = (element: HTMLElement): boolean => {
+    const text = element.textContent || ''
+    const hasChildElements = element.children.length > 0
+    return text.trim().length > 0 && !hasChildElements
+  }
+
+  const makeElementEditable = (element: HTMLElement) => {
+    if (!element || currentlyEditing) return
+    
+    setCurrentlyEditing(element)
+    setOriginalContent(element.textContent || '')
+
+    try {
+      // Make element editable with visual feedback
+      element.contentEditable = 'true'
+      element.style.setProperty('cursor', 'text', 'important')
+      element.style.setProperty('outline', '2px solid #3b82f6', 'important')
+      element.style.setProperty('outline-offset', '2px', 'important')
+      element.style.setProperty('background-color', 'rgba(59, 130, 246, 0.05)', 'important')
+      element.focus()
+
+      // Handle keyboard events
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          finishTextEdit(false)
+          e.preventDefault()
+          e.stopPropagation()
+        } else if (e.key === 'Enter' && !e.shiftKey) {
+          finishTextEdit(true)
+          e.preventDefault()
+          e.stopPropagation()
+        }
+      }
+
+      // Handle blur
+      const handleBlur = () => finishTextEdit(true)
+
+      element.addEventListener('keydown', handleKeyDown)
+      element.addEventListener('blur', handleBlur, { once: true })
+
+      // Store event listeners for cleanup
+      element.setAttribute('data-editing-listeners', 'true')
+      ;(element as any).__keydownHandler = handleKeyDown
+    } catch (error) {
+      console.error('Error making element editable:', error)
+      setCurrentlyEditing(null)
+      setOriginalContent('')
+    }
+  }
+
+  const finishTextEdit = (save: boolean) => {
+    if (!currentlyEditing) return
+
+    try {
+      const element = currentlyEditing
+      const newContent = element.textContent || ''
+
+      // Remove editing styles and attributes
+      element.contentEditable = 'false'
+      element.style.removeProperty('cursor')
+      element.style.removeProperty('outline')
+      element.style.removeProperty('outline-offset')
+      element.style.removeProperty('background-color')
+
+      // Remove event listeners
+      if ((element as any).__keydownHandler) {
+        element.removeEventListener('keydown', (element as any).__keydownHandler)
+        delete (element as any).__keydownHandler
+      }
+      element.removeAttribute('data-editing-listeners')
+
+      // If not saving, restore original content
+      if (!save) {
+        element.textContent = originalContent
+      } else if (originalContent !== newContent) {
+        // Log the change if saved and different
+        logDesignChange('Text Content', newContent, originalContent)
+        console.log('📝 Text edited in comment mode:')
+        console.log('Element:', element)
+        console.log('Original:', originalContent)
+        console.log('New:', newContent)
+        console.log('---')
+      }
+    } catch (error) {
+      console.error('Error finishing text edit:', error)
+    }
+
+    setCurrentlyEditing(null)
+    setOriginalContent('')
+  }
+
+  // Add click handler for text elements when design mode is active
+  React.useEffect(() => {
+    const handleElementClick = (e: Event) => {
+      const mouseEvent = e as MouseEvent
+      // Only handle clicks on the selected element when it's a text element
+      if (selectedElement.type === 'element' && selectedElement.element && 
+          mouseEvent.target === selectedElement.element && 
+          isTextElement(selectedElement.element as HTMLElement) &&
+          !currentlyEditing) {
+        
+        mouseEvent.preventDefault()
+        mouseEvent.stopPropagation()
+        makeElementEditable(selectedElement.element as HTMLElement)
+      }
+    }
+
+    if (selectedElement.type === 'element' && selectedElement.element) {
+      const element = selectedElement.element
+      element.addEventListener('click', handleElementClick, { capture: true })
+      
+      return () => {
+        element.removeEventListener('click', handleElementClick, { capture: true })
+      }
+    }
+  }, [selectedElement, currentlyEditing])
 
   const handleFontSizeChange = (newSize: string) => {
     if (selectedElement.type === 'element' && selectedElement.element) {
@@ -142,6 +266,7 @@ export const usePropertyHandlers = (
     handleBackgroundColorChange,
     handlePaddingChange,
     handleBorderRadiusChange,
-    hasTextContent
+    hasTextContent,
+    isCurrentlyEditingText: !!currentlyEditing
   }
 } 
