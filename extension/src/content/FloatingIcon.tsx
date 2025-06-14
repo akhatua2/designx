@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { MessageCircle, Edit3, Github, MessageSquare, Slack, User } from 'lucide-react'
 import { editModeManager } from './edit-mode'
-import { commentModeManager, type SelectedRegion, CommentBubble } from './comment-mode'
+import { commentModeManager, type SelectedRegion, CommentBubble, ToolBubble } from './comment-mode'
+import { ScreenshotCapture } from './comment-mode/ScreenshotCapture'
 import { gitHubModeManager, type GitHubUser, GitHubBubble } from './integrations/github'
 import { slackModeManager, type SlackUser, type SlackMessage, SlackBubble } from './integrations/slack'
 import { jiraModeManager, type JiraUser, type JiraIssue, JiraBubble } from './integrations/jira'
@@ -233,6 +234,15 @@ const FloatingIcon: React.FC = () => {
       setSelectedElement(elementData)
     })
 
+    // Register callback for tool actions
+    commentModeManager.onToolAction((action, elementData) => {
+      console.log('🔧 Tool action triggered:', action, elementData)
+      if (action === 'save') {
+        // Handle save action - for now just log
+        console.log('💾 Saving selection:', elementData)
+      }
+    })
+
     // Register callback for GitHub authentication state
     gitHubModeManager.onAuthStateChange((isAuthenticated, user) => {
       setIsGitHubAuthenticated(isAuthenticated)
@@ -410,12 +420,70 @@ const FloatingIcon: React.FC = () => {
     setShowUserBubble(false)
   }
 
+  const handleToolSave = async () => {
+    if (!selectedElement) return
+    
+    try {
+      console.log('💾 Starting screenshot capture for save...')
+      
+      let result
+      if (selectedElement.type === 'element' && selectedElement.element) {
+        result = await ScreenshotCapture.captureElement({
+          element: selectedElement.element
+        })
+      } else if (selectedElement.type === 'area' && selectedElement.area) {
+        result = await ScreenshotCapture.captureElement({
+          area: selectedElement.area
+        })
+      }
+      
+      if (result?.success && result.imageUrl) {
+        // Download the image to desktop
+        const response = await fetch(result.imageUrl)
+        const blob = await response.blob()
+        
+        // Create download link
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        
+        // Generate filename based on selection
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+        const selectionType = selectedElement.type
+        const filename = `designx-${selectionType}-${timestamp}.png`
+        
+        a.download = filename
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        window.URL.revokeObjectURL(url)
+        
+        console.log('✅ Screenshot saved to desktop:', filename)
+      } else {
+        console.error('❌ Failed to capture screenshot:', result?.error)
+        alert('Failed to capture screenshot. Please try again.')
+      }
+    } catch (error) {
+      console.error('❌ Error saving screenshot:', error)
+      alert('Error saving screenshot. Please try again.')
+    }
+  }
+
   return (
     <>
-      <CommentBubble
-        selectedElement={selectedElement}
-        onClose={handleCommentClose}
-      />
+      {selectedIcon === 'comment' && selectedElement && (
+        <ToolBubble
+          selectedElement={selectedElement}
+          onSave={handleToolSave}
+        />
+      )}
+      
+      {selectedElement && (
+        <CommentBubble
+          selectedElement={selectedElement}
+          onClose={handleCommentClose}
+        />
+      )}
       
       <GitHubBubble
         isVisible={selectedIcon === 'github'}

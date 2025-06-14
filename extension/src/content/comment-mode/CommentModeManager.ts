@@ -67,6 +67,7 @@ export class CommentModeManager {
   private originalCursor = ''
   private onStateChangeCallback: ((isActive: boolean) => void) | null = null
   private onElementSelectedCallback: ((elementData: SelectedRegion) => void) | null = null
+  private onToolActionCallback: ((action: string, elementData: SelectedRegion) => void) | null = null
   private overlayElement: HTMLElement | null = null
   private selectedElement: Element | null = null
 
@@ -554,10 +555,15 @@ export class CommentModeManager {
     this.onElementSelectedCallback = callback
   }
 
+  public onToolAction(callback: (action: string, elementData: SelectedRegion) => void) {
+    this.onToolActionCallback = callback
+  }
+
   public cleanup() {
     this.deactivate()
     this.onStateChangeCallback = null
     this.onElementSelectedCallback = null
+    this.onToolActionCallback = null
   }
 }
 
