@@ -10,6 +10,13 @@ import { googleAuthManager, type GoogleUser } from './integrations/google/Google
 import type { Project } from './integrations/IntegrationManager'
 import UserBubble from './UserBubble'
 
+interface DesignChange {
+  property: string
+  oldValue: string
+  newValue: string
+  timestamp: string
+}
+
 // Inline styles to ensure the component works exactly as before
 const styles = {
   menuButton: {
@@ -105,6 +112,7 @@ const FloatingIcon: React.FC = () => {
   const [showUserBubble, setShowUserBubble] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isXRayActive, setIsXRayActive] = useState(false)
+  const [designChanges, setDesignChanges] = useState<DesignChange[]>([])
   
   // Google Auth state
   const [isGoogleAuthenticated, setIsGoogleAuthenticated] = useState(false)
@@ -130,6 +138,16 @@ const FloatingIcon: React.FC = () => {
 
   // Keep ref in sync with state
   selectedIconRef.current = selectedIcon
+
+  const handleDesignChanges = (changes: DesignChange[]) => {
+    console.log('🎨 Design changes received in FloatingIcon:', changes)
+    setDesignChanges(changes)
+  }
+
+  // Clear design changes when element changes
+  useEffect(() => {
+    setDesignChanges([])
+  }, [selectedElement])
 
   const handleGoogleAuth = async () => {
     if (isGoogleAuthenticated) {
@@ -325,8 +343,6 @@ const FloatingIcon: React.FC = () => {
     // Note: selectedIcon state will be updated via the onStateChange callback
   }
 
-
-
   const handleCommentClose = () => {
     setSelectedElement(null)
     // Resume comment mode highlighting when bubble is closed
@@ -496,9 +512,11 @@ const FloatingIcon: React.FC = () => {
           isSaving={isSaving}
           onXRay={handleToolXRay}
           isXRayActive={isXRayActive}
+          onDesignChange={handleDesignChanges}
           onClose={() => {
             setSelectedElement(null)
             setIsXRayActive(false) // Also turn off X-ray when closing
+            setDesignChanges([]) // Clear design changes when closing
             // Resume comment mode highlighting so user can select something else
             if (commentModeManager.isCommentModeActive()) {
               commentModeManager.resume()
@@ -515,6 +533,7 @@ const FloatingIcon: React.FC = () => {
       {selectedElement && (
         <CommentBubble
           selectedElement={selectedElement}
+          designChanges={designChanges}
           onClose={handleCommentClose}
         />
       )}

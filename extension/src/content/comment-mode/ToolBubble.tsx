@@ -1,6 +1,14 @@
 import React from 'react'
 import { ArrowDownToLine, Eye, EyeOff, Paintbrush, Loader2, X } from 'lucide-react'
 import type { SelectedRegion } from './CommentModeManager'
+import DesignPropertiesPanel from './DesignPropertiesPanel'
+
+interface DesignChange {
+  property: string
+  oldValue: string
+  newValue: string
+  timestamp: string
+}
 
 interface ToolBubbleProps {
   selectedElement: SelectedRegion | null
@@ -9,139 +17,19 @@ interface ToolBubbleProps {
   onXRay?: () => void
   isXRayActive?: boolean
   onClose?: () => void
+  onDesignChange?: (changes: DesignChange[]) => void
 }
 
-interface DesignProperties {
-  typography: {
-    fontFamily: string
-    fontSize: string
-    fontWeight: string
-    lineHeight: string
-    letterSpacing: string
-    textAlign: string
-    color: string
-  }
-  layout: {
-    display: string
-    position: string
-    width: string
-    height: string
-    padding: { top: string, right: string, bottom: string, left: string }
-    margin: { top: string, right: string, bottom: string, left: string }
-    border: { width: string, style: string, color: string, radius: string }
-  }
-  colors: {
-    color: string
-    backgroundColor: string
-    borderColor: string
-  }
-}
-
-const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSaving = false, onXRay, isXRayActive = false, onClose }) => {
+const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSaving = false, onXRay, isXRayActive = false, onClose, onDesignChange }) => {
   if (!selectedElement) return null
 
   const [isDesignMode, setIsDesignMode] = React.useState(false)
-  const [currentFontSize, setCurrentFontSize] = React.useState<string>('')
 
-  // Initialize font size when element changes
-  React.useEffect(() => {
-    if (selectedElement.type === 'element' && selectedElement.element) {
-      const element = selectedElement.element as HTMLElement
-      const computedStyle = window.getComputedStyle(element)
-      const fontSize = computedStyle.fontSize.replace('px', '')
-      setCurrentFontSize(fontSize)
+  const handleDesignChanges = (changes: DesignChange[]) => {
+    console.log('🔄 Design changes received in ToolBubble:', changes)
+    if (onDesignChange) {
+      onDesignChange(changes)
     }
-  }, [selectedElement])
-
-  // Handle font size changes
-  const handleFontSizeChange = (newSize: string) => {
-    if (selectedElement.type !== 'element' || !selectedElement.element) return
-    
-    const element = selectedElement.element as HTMLElement
-    const sizeValue = parseInt(newSize)
-    
-    if (!isNaN(sizeValue) && sizeValue > 0) {
-      element.style.fontSize = `${sizeValue}px`
-      setCurrentFontSize(newSize)
-      console.log('🎨 Font size changed to:', `${sizeValue}px`)
-    }
-  }
-
-  // Check if element has text content
-  const hasTextContent = () => {
-    if (selectedElement.type !== 'element' || !selectedElement.element) return false
-    const element = selectedElement.element as HTMLElement
-    const textContent = element.textContent?.trim()
-    return textContent && textContent.length > 0
-  }
-
-  // Extract design properties from the selected element
-  const getDesignProperties = (): DesignProperties | null => {
-    if (selectedElement.type !== 'element' || !selectedElement.element) return null
-    
-    const element = selectedElement.element as HTMLElement
-    const computedStyle = window.getComputedStyle(element)
-    
-    return {
-      typography: {
-        fontFamily: computedStyle.fontFamily,
-        fontSize: computedStyle.fontSize,
-        fontWeight: computedStyle.fontWeight,
-        lineHeight: computedStyle.lineHeight,
-        letterSpacing: computedStyle.letterSpacing,
-        textAlign: computedStyle.textAlign,
-        color: computedStyle.color
-      },
-      layout: {
-        display: computedStyle.display,
-        position: computedStyle.position,
-        width: computedStyle.width,
-        height: computedStyle.height,
-        padding: {
-          top: computedStyle.paddingTop,
-          right: computedStyle.paddingRight,
-          bottom: computedStyle.paddingBottom,
-          left: computedStyle.paddingLeft
-        },
-        margin: {
-          top: computedStyle.marginTop,
-          right: computedStyle.marginRight,
-          bottom: computedStyle.marginBottom,
-          left: computedStyle.marginLeft
-        },
-        border: {
-          width: computedStyle.borderWidth,
-          style: computedStyle.borderStyle,
-          color: computedStyle.borderColor,
-          radius: computedStyle.borderRadius
-        }
-      },
-      colors: {
-        color: computedStyle.color,
-        backgroundColor: computedStyle.backgroundColor,
-        borderColor: computedStyle.borderColor
-      }
-    }
-  }
-
-  const designProperties = getDesignProperties()
-
-  // Helper functions for formatting design properties
-  const formatValue = (value: string) => {
-    if (!value || value === 'auto' || value === 'normal') return '—'
-    return value
-  }
-
-  const formatColor = (color: string) => {
-    if (!color || color === 'rgba(0, 0, 0, 0)' || color === 'transparent') return '—'
-    return color
-  }
-
-  const formatFontFamily = (fontFamily: string) => {
-    if (!fontFamily) return '—'
-    // Extract first font name and clean it up
-    const firstFont = fontFamily.split(',')[0].replace(/['"]/g, '').trim()
-    return firstFont
   }
 
   // Smart positioning that avoids CommentBubble and stays in viewport
@@ -271,31 +159,6 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
     flexShrink: 0
   }
 
-  const titleStyles = {
-    fontSize: '12px',
-    fontWeight: '600',
-    color: 'white'
-  }
-
-  const buttonStyles = {
-    width: '100%',
-    padding: '8px 0px', // Remove horizontal padding to align with header
-    borderRadius: '6px',
-    backgroundColor: 'transparent',
-    border: 'none',
-    color: 'white',
-    fontSize: '11px',
-    fontWeight: '500',
-    cursor: isSaving ? 'default' : 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    transition: 'background-color 0.2s ease',
-    opacity: isSaving ? 0.7 : 1,
-    position: 'relative' as const,
-    overflow: 'hidden'
-  }
-
   const handleSave = () => {
     if (isSaving) return // Prevent multiple clicks while saving
     console.log('💾 Save clicked for:', selectedElement.type)
@@ -386,28 +249,6 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
             );
             animation: shimmer 1.5s infinite;
             pointer-events: none;
-          }
-          
-          /* Custom slider styling */
-          input[type="range"]::-webkit-slider-thumb {
-            appearance: none;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: #60a5fa;
-            cursor: pointer;
-            border: 2px solid white;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-          }
-          
-          input[type="range"]::-moz-range-thumb {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: #60a5fa;
-            cursor: pointer;
-            border: 2px solid white;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
           }
         `}
       </style>
@@ -517,217 +358,12 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
           </button>
         </div>
         
-        {/* Design Properties Content - always visible for elements */}
-        {selectedElement.type === 'element' && designProperties && (
-          <div style={{ overflow: 'visible' }}>
-            {/* Typography Section */}
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{ 
-                fontSize: '12px', 
-                fontWeight: '600', 
-                color: '#9ca3af', 
-                marginBottom: '12px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px'
-              }}>
-                Typography
-              </div>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>Font</span>
-                  <span style={{ 
-                    fontSize: '11px', 
-                    color: 'white', 
-                    maxWidth: '200px', 
-                    textAlign: 'right', 
-                    overflow: 'hidden', 
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap'
-                  }}>
-                    {formatFontFamily(designProperties.typography.fontFamily)}
-                  </span>
-                </div>
-                
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>Size</span>
-                  {isDesignMode && hasTextContent() ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, justifyContent: 'flex-end' }}>
-                      <input
-                        type="range"
-                        value={currentFontSize}
-                        onChange={(e) => handleFontSizeChange(e.target.value)}
-                        min="8"
-                        max="72"
-                        style={{
-                          width: '80px',
-                          height: '3px',
-                          borderRadius: '2px',
-                          background: 'rgba(255, 255, 255, 0.2)',
-                          outline: 'none',
-                          cursor: 'pointer',
-                          appearance: 'none',
-                          WebkitAppearance: 'none'
-                        }}
-                      />
-                      <span style={{ fontSize: '11px', color: 'white', minWidth: '30px', textAlign: 'right' }}>
-                        {currentFontSize}px
-                      </span>
-                    </div>
-                  ) : (
-                    <span style={{ fontSize: '11px', color: 'white' }}>
-                      {formatValue(designProperties.typography.fontSize)}
-                    </span>
-                  )}
-                </div>
-                
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>Weight</span>
-                  <span style={{ fontSize: '11px', color: 'white' }}>
-                    {formatValue(designProperties.typography.fontWeight)}
-                  </span>
-                </div>
-                
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>Line Height</span>
-                  <span style={{ fontSize: '11px', color: 'white' }}>
-                    {formatValue(designProperties.typography.lineHeight)}
-                  </span>
-                </div>
-                
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>Align</span>
-                  <span style={{ fontSize: '11px', color: 'white' }}>
-                    {formatValue(designProperties.typography.textAlign)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Layout Section */}
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{ 
-                fontSize: '12px', 
-                fontWeight: '600', 
-                color: '#9ca3af', 
-                marginBottom: '12px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px'
-              }}>
-                Layout
-              </div>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>Display</span>
-                  <span style={{ fontSize: '11px', color: 'white' }}>
-                    {formatValue(designProperties.layout.display)}
-                  </span>
-                </div>
-                
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>Width</span>
-                  <span style={{ fontSize: '11px', color: 'white' }}>
-                    {formatValue(designProperties.layout.width)}
-                  </span>
-                </div>
-                
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>Height</span>
-                  <span style={{ fontSize: '11px', color: 'white' }}>
-                    {formatValue(designProperties.layout.height)}
-                  </span>
-                </div>
-                
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>Padding</span>
-                  <span style={{ fontSize: '11px', color: 'white', fontFamily: 'monospace' }}>
-                    {[
-                      formatValue(designProperties.layout.padding.top),
-                      formatValue(designProperties.layout.padding.right),
-                      formatValue(designProperties.layout.padding.bottom),
-                      formatValue(designProperties.layout.padding.left)
-                    ].join(' ')}
-                  </span>
-                </div>
-                
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>Margin</span>
-                  <span style={{ fontSize: '11px', color: 'white', fontFamily: 'monospace' }}>
-                    {[
-                      formatValue(designProperties.layout.margin.top),
-                      formatValue(designProperties.layout.margin.right),
-                      formatValue(designProperties.layout.margin.bottom),
-                      formatValue(designProperties.layout.margin.left)
-                    ].join(' ')}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Colors Section */}
-            <div>
-              <div style={{ 
-                fontSize: '12px', 
-                fontWeight: '600', 
-                color: '#9ca3af', 
-                marginBottom: '12px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px'
-              }}>
-                Colors
-              </div>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>Text</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ 
-                      width: '16px', 
-                      height: '16px', 
-                      borderRadius: '3px', 
-                      backgroundColor: designProperties.colors.color,
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      flexShrink: 0
-                    }} />
-                    <span style={{ fontSize: '11px', color: 'white', fontFamily: 'monospace' }}>
-                      {formatColor(designProperties.colors.color)}
-                    </span>
-                  </div>
-                </div>
-                
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>Background</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ 
-                      width: '16px', 
-                      height: '16px', 
-                      borderRadius: '3px', 
-                      backgroundColor: designProperties.colors.backgroundColor,
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      flexShrink: 0
-                    }} />
-                    <span style={{ fontSize: '11px', color: 'white', fontFamily: 'monospace' }}>
-                      {formatColor(designProperties.colors.backgroundColor)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* For area selections, show a simple message */}
-        {selectedElement.type === 'area' && (
-          <div style={{ 
-            padding: '20px', 
-            textAlign: 'center', 
-            color: '#9ca3af', 
-            fontSize: '12px' 
-          }}>
-            Design properties are only available for individual elements
-          </div>
-        )}
+        {/* Design Properties Panel */}
+        <DesignPropertiesPanel 
+          selectedElement={selectedElement}
+          isDesignMode={isDesignMode}
+          onDesignChange={handleDesignChanges}
+        />
       </div>
     </>
   )

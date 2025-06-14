@@ -5,8 +5,16 @@ import GitHubIssueForm from './GitHubIssueForm'
 import SlackMessageForm from './SlackMessageForm'
 import JiraIssueForm from './JiraIssueForm'
 
+interface DesignChange {
+  property: string
+  oldValue: string
+  newValue: string
+  timestamp: string
+}
+
 interface CommentBubbleProps {
   selectedElement: SelectedRegion | null
+  designChanges?: DesignChange[]
   onClose: () => void
 }
 
@@ -14,6 +22,7 @@ type Platform = 'github' | 'slack' | 'jira'
 
 const CommentBubble: React.FC<CommentBubbleProps> = ({ 
   selectedElement, 
+  designChanges,
   onClose
 }) => {
   const [comment, setComment] = useState('')
@@ -288,6 +297,7 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
           <GitHubIssueForm
             selectedElement={selectedElement}
             comment={comment}
+            designChanges={designChanges}
             onCommentChange={setComment}
             onSubmit={handleFormSubmit}
             onKeyDown={handleKeyDown}

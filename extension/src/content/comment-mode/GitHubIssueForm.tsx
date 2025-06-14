@@ -5,9 +5,17 @@ import { ScreenshotCapture } from './ScreenshotCapture'
 import { gitHubModeManager } from '../integrations/github'
 import type { GitHubRepo } from '../integrations/github/GitHubModeManager'
 
+interface DesignChange {
+  property: string
+  oldValue: string
+  newValue: string
+  timestamp: string
+}
+
 interface GitHubIssueFormProps {
   selectedElement: SelectedRegion
   comment: string
+  designChanges?: DesignChange[]
   onCommentChange: (comment: string) => void
   onSubmit: (comment: string, externalUrl?: string, externalId?: string) => void
   onKeyDown: (e: React.KeyboardEvent) => void
@@ -17,6 +25,7 @@ interface GitHubIssueFormProps {
 const GitHubIssueForm: React.FC<GitHubIssueFormProps> = ({
   selectedElement,
   comment,
+  designChanges,
   onCommentChange,
   onSubmit,
   onKeyDown,
@@ -171,12 +180,24 @@ ${JSON.stringify(selectedElement.reactInfo.hooks, null, 2)}
 
 ---` : ''
 
+      const designChangesSection = designChanges && designChanges.length > 0 ? `
+
+## Design Changes Suggested
+
+The following design changes were suggested for this element:
+
+${designChanges.map((change, index) => 
+  `${index + 1}. **${change.property}**: ${change.oldValue} → ${change.newValue}`
+).join('\n')}
+
+---` : ''
+
       const body = `## User Feedback
 
 ${comment.trim()}
 
 **Priority:** ${priority}
-${figmaSection}${screenshotSection}
+${figmaSection}${designChangesSection}${screenshotSection}
 
 ### Technical Details
 <details>
