@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { MessageCircle, Edit3, Github, MessageSquare, Slack, User } from 'lucide-react'
 import { editModeManager } from './edit-mode'
-import { commentModeManager, type SelectedRegion, CommentBubble, ToolBubble } from './comment-mode'
+import { commentModeManager, type SelectedRegion, CommentBubble, ToolBubble, XRayOverlay } from './comment-mode'
 import { ScreenshotCapture } from './comment-mode/ScreenshotCapture'
 import { gitHubModeManager, type GitHubUser, GitHubBubble } from './integrations/github'
 import { slackModeManager, type SlackUser, type SlackMessage, SlackBubble } from './integrations/slack'
@@ -104,6 +104,7 @@ const FloatingIcon: React.FC = () => {
   const [isHovered, setIsHovered] = useState(false)
   const [showUserBubble, setShowUserBubble] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isXRayActive, setIsXRayActive] = useState(false)
   
   // Google Auth state
   const [isGoogleAuthenticated, setIsGoogleAuthenticated] = useState(false)
@@ -481,6 +482,11 @@ const FloatingIcon: React.FC = () => {
     }
   }
 
+  const handleToolXRay = () => {
+    setIsXRayActive(!isXRayActive)
+    console.log('🔍 X-ray toggled:', !isXRayActive)
+  }
+
   return (
     <>
       {selectedIcon === 'comment' && selectedElement && (
@@ -488,8 +494,15 @@ const FloatingIcon: React.FC = () => {
           selectedElement={selectedElement}
           onSave={handleToolSave}
           isSaving={isSaving}
+          onXRay={handleToolXRay}
+          isXRayActive={isXRayActive}
         />
       )}
+      
+      <XRayOverlay
+        selectedElement={selectedElement}
+        isVisible={isXRayActive}
+      />
       
       {selectedElement && (
         <CommentBubble

@@ -5,9 +5,11 @@ interface ToolBubbleProps {
   selectedElement: SelectedRegion | null
   onSave: () => void
   isSaving?: boolean
+  onXRay?: () => void
+  isXRayActive?: boolean
 }
 
-const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSaving = false }) => {
+const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSaving = false, onXRay, isXRayActive = false }) => {
   if (!selectedElement) return null
 
   // Calculate position based on selection type - position to the right or left
@@ -133,6 +135,13 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
     onSave()
   }
 
+  const handleXRay = () => {
+    console.log('🔍 X-ray clicked for:', selectedElement.type)
+    if (onXRay) {
+      onXRay()
+    }
+  }
+
   return (
     <>
       <style>
@@ -200,6 +209,24 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
             {isSaving ? 'Saving...' : 'Save'}
             {isSaving && <div className="shimmer-overlay" />}
           </button>
+          
+          {onXRay && (
+            <button
+              className="tool-button"
+              onClick={handleXRay}
+              style={{
+                ...buttonStyles,
+                backgroundColor: isXRayActive ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
+                color: isXRayActive ? '#60a5fa' : 'white'
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+              {isXRayActive ? 'Hide X-ray' : 'X-ray'}
+            </button>
+          )}
         </div>
       </div>
     </>
