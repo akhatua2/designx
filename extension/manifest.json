@@ -4,9 +4,15 @@
   "version": "1.0.0",
   "description": "A modern Chrome extension with a floating icon on web pages",
   "permissions": [
-    "activeTab",
-    "storage"
+    "activeTab", 
+    "storage",
+    "tabCapture",
+    "downloads"
   ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "DesignX Extension"
+  },
   "host_permissions": [
     "<all_urls>"
   ],

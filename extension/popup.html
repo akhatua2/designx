@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 250px;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      text-align: center;
+    }
+    .logo {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    .subtitle {
+      font-size: 14px;
+      opacity: 0.9;
+      margin-bottom: 20px;
+    }
+    .status {
+      padding: 10px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      font-size: 12px;
+      margin-bottom: 15px;
+    }
+    .info {
+      font-size: 11px;
+      opacity: 0.8;
+      line-height: 1.4;
+      margin-bottom: 15px;
+    }
+    .record-btn {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .record-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+    }
+    .record-btn:active {
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+  <div class="logo">DesignX</div>
+  <div class="subtitle">Extension Activated!</div>
+  
+  <div class="status">
+    ✅ Recording permissions enabled for this tab
+  </div>
+  
+  <div class="info">
+    Click the button below to start recording this tab, or use the recording feature in your comment tools.
+  </div>
+  
+  <button id="startRecording" class="record-btn">
+    🎬 Start Tab Recording
+  </button>
+  
+  <script src="popup.js"></script>
+</body>
+</html> 

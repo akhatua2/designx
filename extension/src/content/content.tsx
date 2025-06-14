@@ -1,7 +1,12 @@
 // React JSX transform handles React import automatically
 import { createRoot } from 'react-dom/client'
 import FloatingIcon from './FloatingIcon'
+import { ScreenRecordingCapture } from './comment-mode/ScreenRecordingCapture'
 import './content.css'
+
+// Initialize ScreenRecordingCapture to register message listeners
+// The class has a static block that sets up the message listener
+ScreenRecordingCapture
 
 // Function to inject the floating icon with Shadow DOM encapsulation
 function injectFloatingIcon() {

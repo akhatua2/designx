@@ -32,6 +32,7 @@ from sweagent_service import (
 )
 from auth_service import get_current_user, get_current_user_optional
 from screenshot_service import upload_screenshot_endpoint, delete_screenshot_endpoint
+from recording_service import upload_recording_endpoint, delete_recording_endpoint
 
 # Task models
 class CreateTaskRequest(BaseModel):
@@ -60,6 +61,16 @@ class ScreenshotResponse(BaseModel):
     content_type: str
     created_at: datetime
 
+class RecordingResponse(BaseModel):
+    id: str
+    filename: str
+    upload_url: str
+    file_size: Optional[int]
+    content_type: str
+    duration: Optional[int]  # in milliseconds
+    quality: str
+    created_at: datetime
+
 class TaskResponse(BaseModel):
     id: str
     comment_text: str
@@ -73,6 +84,7 @@ class TaskResponse(BaseModel):
     external_url: Optional[str]
     metadata: dict
     screenshots: Optional[List[ScreenshotResponse]] = []
+    recordings: Optional[List[RecordingResponse]] = []
     created_at: datetime
     updated_at: datetime
 
@@ -197,6 +209,17 @@ async def delete_screenshot(filename: str, current_user: dict = Depends(get_curr
     """Delete a screenshot image"""
     return await delete_screenshot_endpoint(filename, current_user)
 
+# =================== Recording Upload Routes ===================
+@app.post("/api/upload/recording")
+async def upload_recording(video: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    """Upload a recording video"""
+    return await upload_recording_endpoint(video, current_user)
+
+@app.delete("/api/upload/recording/{filename:path}")
+async def delete_recording(filename: str, current_user: dict = Depends(get_current_user)):
+    """Delete a recording video"""
+    return await delete_recording_endpoint(filename, current_user)
+
 @app.post("/api/tasks/{task_id}/screenshots", response_model=ScreenshotResponse)
 async def upload_task_screenshot(task_id: str, image: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     """Upload a screenshot for a specific task"""
@@ -205,6 +228,15 @@ async def upload_task_screenshot(task_id: str, image: UploadFile = File(...), cu
     # Use the new service method that directly creates screenshots with task association
     result = await create_screenshot_for_task_endpoint(image, task_id, current_user)
     return ScreenshotResponse(**result)
+
+@app.post("/api/tasks/{task_id}/recordings", response_model=RecordingResponse)
+async def upload_task_recording(task_id: str, video: UploadFile = File(...), duration: Optional[int] = None, current_user: dict = Depends(get_current_user)):
+    """Upload a recording for a specific task"""
+    from recording_service import create_recording_for_task_endpoint
+    
+    # Use the new service method that directly creates recordings with task association
+    result = await create_recording_for_task_endpoint(task_id, video, duration, current_user)
+    return RecordingResponse(**result)
 
 @app.get("/api/tasks/{task_id}/screenshots", response_model=List[ScreenshotResponse])
 async def get_task_screenshots(task_id: str, current_user: dict = Depends(get_current_user)):
@@ -226,6 +258,28 @@ async def get_task_screenshots(task_id: str, current_user: dict = Depends(get_cu
             return []
     except Exception as e:
         logger.error(f"Error fetching task screenshots: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/api/tasks/{task_id}/recordings", response_model=List[RecordingResponse])
+async def get_task_recordings(task_id: str, current_user: dict = Depends(get_current_user)):
+    """Get all recordings for a specific task"""
+    from config import get_supabase_client
+    
+    supabase = get_supabase_client()
+    
+    # Verify task belongs to current user
+    task_result = supabase.table("tasks").select("id").eq("id", task_id).eq("user_id", current_user["id"]).execute()
+    if not task_result.data:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    try:
+        result = supabase.table("recordings").select("*").eq("tasks_id", task_id).execute()
+        if result.data:
+            return [RecordingResponse(**recording) for recording in result.data]
+        else:
+            return []
+    except Exception as e:
+        logger.error(f"Error fetching task recordings: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 # =================== Task Management Routes ===================
@@ -293,9 +347,10 @@ async def get_user_tasks(current_user: dict = Depends(get_current_user)):
         if not tasks_result.data:
             return []
         
-        # Get screenshots for all tasks
+        # Get screenshots and recordings for all tasks
         task_ids = [task["id"] for task in tasks_result.data]
         screenshots_result = supabase.table("screenshots").select("*").in_("tasks_id", task_ids).execute()
+        recordings_result = supabase.table("recordings").select("*").in_("tasks_id", task_ids).execute()
         
         # Group screenshots by tasks_id
         screenshots_by_task = {}
@@ -306,14 +361,24 @@ async def get_user_tasks(current_user: dict = Depends(get_current_user)):
                     screenshots_by_task[task_id] = []
                 screenshots_by_task[task_id].append(ScreenshotResponse(**screenshot))
         
-        # Build response with screenshots
-        tasks_with_screenshots = []
+        # Group recordings by tasks_id
+        recordings_by_task = {}
+        if recordings_result.data:
+            for recording in recordings_result.data:
+                task_id = recording["tasks_id"]
+                if task_id not in recordings_by_task:
+                    recordings_by_task[task_id] = []
+                recordings_by_task[task_id].append(RecordingResponse(**recording))
+        
+        # Build response with screenshots and recordings
+        tasks_with_media = []
         for task in tasks_result.data:
             task_data = task.copy()
             task_data["screenshots"] = screenshots_by_task.get(task["id"], [])
-            tasks_with_screenshots.append(TaskResponse(**task_data))
+            task_data["recordings"] = recordings_by_task.get(task["id"], [])
+            tasks_with_media.append(TaskResponse(**task_data))
         
-        return tasks_with_screenshots
+        return tasks_with_media
     except Exception as e:
         logger.error(f"Error fetching tasks: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")

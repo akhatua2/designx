@@ -4,6 +4,7 @@ import type { SelectedElement } from './CommentModeManager'
 import GitHubIssueForm from './GitHubIssueForm'
 import SlackMessageForm from './SlackMessageForm'
 import JiraIssueForm from './JiraIssueForm'
+import RecordingControls from './RecordingControls'
 
 interface CommentBubbleProps {
   selectedElement: SelectedElement | null
@@ -19,16 +20,23 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
   const [comment, setComment] = useState('')
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>('github')
   const [uploadedScreenshots, setUploadedScreenshots] = useState<string[]>([])
+  const [uploadedRecordings, setUploadedRecordings] = useState<string[]>([])
 
   // Clear comment and screenshots when element changes
   useEffect(() => {
     setComment('')
     setUploadedScreenshots([])
+    setUploadedRecordings([])
   }, [selectedElement])
 
   const handleScreenshotUploaded = (screenshotUrl: string) => {
     setUploadedScreenshots(prev => [...prev, screenshotUrl])
     console.log('📸 Screenshot uploaded and tracked:', screenshotUrl)
+  }
+
+  const handleRecordingUploaded = (recordingUrl: string) => {
+    setUploadedRecordings(prev => [...prev, recordingUrl])
+    console.log('🎬 Recording uploaded and tracked:', recordingUrl)
   }
 
   const handleCommentSubmit = async (submittedComment: string, platform: string): Promise<any> => {
@@ -40,8 +48,12 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
     console.log('Comment:', submittedComment)
     console.log('Platform:', platform)
     console.log('Screenshots to link:', uploadedScreenshots.length)
+    console.log('Recordings to link:', uploadedRecordings.length)
     if (uploadedScreenshots.length > 0) {
       console.log('Screenshot URLs:', uploadedScreenshots)
+    }
+    if (uploadedRecordings.length > 0) {
+      console.log('Recording URLs:', uploadedRecordings)
     }
     console.log('---')
     
@@ -65,6 +77,7 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
             dom_path: selectedElement.domPath,
             page_url: window.location.href,
             screenshot_urls: uploadedScreenshots,
+            recording_urls: uploadedRecordings,
             metadata: {
               timestamp: new Date().toISOString(),
               user_agent: navigator.userAgent
@@ -268,6 +281,18 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
                 📸 {uploadedScreenshots.length} screenshot{uploadedScreenshots.length > 1 ? 's' : ''}
               </div>
             )}
+            {uploadedRecordings.length > 0 && (
+              <div style={{
+                fontSize: '9px',
+                color: 'rgba(255, 255, 255, 0.6)',
+                padding: '2px 6px',
+                borderRadius: '4px',
+                backgroundColor: 'rgba(99, 102, 241, 0.2)',
+                border: '1px solid rgba(99, 102, 241, 0.3)'
+              }}>
+                🎬 {uploadedRecordings.length} recording{uploadedRecordings.length > 1 ? 's' : ''}
+              </div>
+            )}
             <button
               onClick={onClose}
               style={closeButtonStyles}
@@ -280,36 +305,45 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
         </div>
         
         {selectedPlatform === 'github' && (
-          <GitHubIssueForm
-            selectedElement={selectedElement}
-            comment={comment}
-            onCommentChange={setComment}
-            onSubmit={handleFormSubmit}
-            onKeyDown={handleKeyDown}
-            onScreenshotUploaded={handleScreenshotUploaded}
-          />
+          <>
+            <RecordingControls onRecordingUploaded={handleRecordingUploaded} />
+            <GitHubIssueForm
+              selectedElement={selectedElement}
+              comment={comment}
+              onCommentChange={setComment}
+              onSubmit={handleFormSubmit}
+              onKeyDown={handleKeyDown}
+              onScreenshotUploaded={handleScreenshotUploaded}
+            />
+          </>
         )}
         
         {selectedPlatform === 'slack' && (
-          <SlackMessageForm
-            selectedElement={selectedElement}
-            comment={comment}
-            onCommentChange={setComment}
-            onSubmit={handleFormSubmit}
-            onKeyDown={handleKeyDown}
-            onScreenshotUploaded={handleScreenshotUploaded}
-          />
+          <>
+            <RecordingControls onRecordingUploaded={handleRecordingUploaded} />
+            <SlackMessageForm
+              selectedElement={selectedElement}
+              comment={comment}
+              onCommentChange={setComment}
+              onSubmit={handleFormSubmit}
+              onKeyDown={handleKeyDown}
+              onScreenshotUploaded={handleScreenshotUploaded}
+            />
+          </>
         )}
         
         {selectedPlatform === 'jira' && (
-          <JiraIssueForm
-            selectedElement={selectedElement}
-            comment={comment}
-            onCommentChange={setComment}
-            onSubmit={handleFormSubmit}
-            onKeyDown={handleKeyDown}
-            onScreenshotUploaded={handleScreenshotUploaded}
-          />
+          <>
+            <RecordingControls onRecordingUploaded={handleRecordingUploaded} />
+            <JiraIssueForm
+              selectedElement={selectedElement}
+              comment={comment}
+              onCommentChange={setComment}
+              onSubmit={handleFormSubmit}
+              onKeyDown={handleKeyDown}
+              onScreenshotUploaded={handleScreenshotUploaded}
+            />
+          </>
         )}
       </div>
     </>

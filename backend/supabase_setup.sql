@@ -43,6 +43,22 @@ CREATE TABLE IF NOT EXISTS screenshots (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Create recordings table
+CREATE TABLE IF NOT EXISTS recordings (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    tasks_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    filename TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    file_size INTEGER,
+    content_type TEXT DEFAULT 'video/webm',
+    upload_url TEXT NOT NULL,
+    duration INTEGER, -- Duration in milliseconds
+    quality VARCHAR(20) DEFAULT 'medium', -- 'low', 'medium', 'high'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Create basic indexes for performance
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);
@@ -52,6 +68,8 @@ CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
 CREATE INDEX IF NOT EXISTS idx_screenshots_tasks_id ON screenshots(tasks_id); -- Changed from task_id to tasks_id
 CREATE INDEX IF NOT EXISTS idx_screenshots_user_id ON screenshots(user_id);
+CREATE INDEX IF NOT EXISTS idx_recordings_tasks_id ON recordings(tasks_id);
+CREATE INDEX IF NOT EXISTS idx_recordings_user_id ON recordings(user_id);
 
 -- Create updated_at trigger
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -66,6 +84,7 @@ $$ language 'plpgsql';
 DROP TRIGGER IF EXISTS update_users_updated_at ON users;
 DROP TRIGGER IF EXISTS update_tasks_updated_at ON tasks;
 DROP TRIGGER IF EXISTS update_screenshots_updated_at ON screenshots;
+DROP TRIGGER IF EXISTS update_recordings_updated_at ON recordings;
 
 -- Create triggers
 CREATE TRIGGER update_users_updated_at 
@@ -83,10 +102,16 @@ CREATE TRIGGER update_screenshots_updated_at
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER update_recordings_updated_at 
+    BEFORE UPDATE ON recordings 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
 -- Enable Row Level Security (RLS)
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE screenshots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE recordings ENABLE ROW LEVEL SECURITY;
 
 -- Drop existing policies if they exist
 DROP POLICY IF EXISTS "Allow all operations on users" ON users;
@@ -119,9 +144,26 @@ CREATE POLICY "Users can delete own screenshots" ON screenshots
 CREATE POLICY "Users can access screenshots via task ownership" ON screenshots
     FOR ALL USING (EXISTS (SELECT 1 FROM tasks WHERE tasks.id = screenshots.tasks_id AND tasks.user_id = auth.uid())); -- Changed from task_id to tasks_id
 
+-- Recordings policies
+CREATE POLICY "Users can view own recordings" ON recordings
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own recordings" ON recordings
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own recordings" ON recordings
+    FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own recordings" ON recordings
+    FOR DELETE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can access recordings via task ownership" ON recordings
+    FOR ALL USING (EXISTS (SELECT 1 FROM tasks WHERE tasks.id = recordings.tasks_id AND tasks.user_id = auth.uid()));
+
 -- Grant permissions
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
 GRANT ALL ON users TO anon, authenticated;
 GRANT ALL ON tasks TO anon, authenticated;
 GRANT ALL ON screenshots TO anon, authenticated;
+GRANT ALL ON recordings TO anon, authenticated;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
