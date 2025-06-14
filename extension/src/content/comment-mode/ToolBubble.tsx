@@ -1,4 +1,5 @@
 import React from 'react'
+import { ArrowDownToLine, Eye, EyeOff, Paintbrush, Loader2 } from 'lucide-react'
 import type { SelectedRegion } from './CommentModeManager'
 
 interface ToolBubbleProps {
@@ -9,12 +10,107 @@ interface ToolBubbleProps {
   isXRayActive?: boolean
 }
 
+interface DesignProperties {
+  typography: {
+    fontFamily: string
+    fontSize: string
+    fontWeight: string
+    lineHeight: string
+    letterSpacing: string
+    textAlign: string
+    color: string
+  }
+  layout: {
+    display: string
+    position: string
+    width: string
+    height: string
+    padding: { top: string, right: string, bottom: string, left: string }
+    margin: { top: string, right: string, bottom: string, left: string }
+    border: { width: string, style: string, color: string, radius: string }
+  }
+  colors: {
+    color: string
+    backgroundColor: string
+    borderColor: string
+  }
+}
+
 const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSaving = false, onXRay, isXRayActive = false }) => {
   if (!selectedElement) return null
 
+  // Extract design properties from the selected element
+  const getDesignProperties = (): DesignProperties | null => {
+    if (selectedElement.type !== 'element' || !selectedElement.element) return null
+    
+    const element = selectedElement.element as HTMLElement
+    const computedStyle = window.getComputedStyle(element)
+    
+    return {
+      typography: {
+        fontFamily: computedStyle.fontFamily,
+        fontSize: computedStyle.fontSize,
+        fontWeight: computedStyle.fontWeight,
+        lineHeight: computedStyle.lineHeight,
+        letterSpacing: computedStyle.letterSpacing,
+        textAlign: computedStyle.textAlign,
+        color: computedStyle.color
+      },
+      layout: {
+        display: computedStyle.display,
+        position: computedStyle.position,
+        width: computedStyle.width,
+        height: computedStyle.height,
+        padding: {
+          top: computedStyle.paddingTop,
+          right: computedStyle.paddingRight,
+          bottom: computedStyle.paddingBottom,
+          left: computedStyle.paddingLeft
+        },
+        margin: {
+          top: computedStyle.marginTop,
+          right: computedStyle.marginRight,
+          bottom: computedStyle.marginBottom,
+          left: computedStyle.marginLeft
+        },
+        border: {
+          width: computedStyle.borderWidth,
+          style: computedStyle.borderStyle,
+          color: computedStyle.borderColor,
+          radius: computedStyle.borderRadius
+        }
+      },
+      colors: {
+        color: computedStyle.color,
+        backgroundColor: computedStyle.backgroundColor,
+        borderColor: computedStyle.borderColor
+      }
+    }
+  }
+
+  const designProperties = getDesignProperties()
+
+  // Helper functions for formatting design properties
+  const formatValue = (value: string) => {
+    if (!value || value === 'auto' || value === 'normal') return '—'
+    return value
+  }
+
+  const formatColor = (color: string) => {
+    if (!color || color === 'rgba(0, 0, 0, 0)' || color === 'transparent') return '—'
+    return color
+  }
+
+  const formatFontFamily = (fontFamily: string) => {
+    if (!fontFamily) return '—'
+    // Extract first font name and clean it up
+    const firstFont = fontFamily.split(',')[0].replace(/['"]/g, '').trim()
+    return firstFont
+  }
+
   // Calculate position based on selection type - position to the right or left
   const getPosition = () => {
-    const bubbleWidth = 200
+    const bubbleWidth = 320 // Wider to accommodate design properties
     const spacing = 20 // Space between selected element and bubble
     
     if (selectedElement.type === 'element' && selectedElement.element) {
@@ -77,9 +173,9 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
 
   const bubbleStyles = {
     position: 'fixed' as const,
-    top: `${Math.max(10, Math.min(window.innerHeight - 150, position.top))}px`, // Keep within viewport vertically
+    top: `${Math.max(10, Math.min(window.innerHeight - 400, position.top))}px`, // Keep within viewport vertically
     left: `${position.left}px`,
-    width: '160px',
+    width: '300px',
     borderRadius: '12px',
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
     backdropFilter: 'blur(12px)',
@@ -142,6 +238,11 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
     }
   }
 
+  const handleDesign = () => {
+    console.log('🎨 Design icon clicked (placeholder)')
+    // This is just a placeholder for now
+  }
+
   return (
     <>
       <style>
@@ -163,6 +264,19 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
             }
             100% {
               transform: translateX(100%);
+            }
+          }
+          
+          .animate-spin {
+            animation: spin 1s linear infinite;
+          }
+          
+          @keyframes spin {
+            from {
+              transform: rotate(0deg);
+            }
+            to {
+              transform: rotate(360deg);
             }
           }
           
@@ -188,46 +302,267 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
         `}
       </style>
       <div style={bubbleStyles} data-floating-icon="true">
+        {/* Header with 3 action icons */}
         <div style={headerStyles}>
-          <div style={titleStyles}>
-            Tools
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {/* Save Icon */}
+            <button
+              className={`tool-button ${isSaving ? 'saving' : ''}`}
+              onClick={handleSave}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'white',
+                cursor: isSaving ? 'default' : 'pointer',
+                padding: '6px',
+                borderRadius: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'background-color 0.2s ease',
+                opacity: isSaving ? 0.7 : 1,
+                position: 'relative' as const,
+                overflow: 'hidden'
+              }}
+              disabled={isSaving}
+              title={isSaving ? 'Saving...' : 'Save'}
+            >
+              {isSaving ? <Loader2 size={16} className="animate-spin" fill="none" /> : <ArrowDownToLine size={16} fill="none" />}
+            </button>
+
+            {/* X-ray Icon */}
+            {onXRay && (
+              <button
+                className="tool-button"
+                onClick={handleXRay}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: isXRayActive ? '#60a5fa' : 'white',
+                  cursor: 'pointer',
+                  padding: '6px',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'background-color 0.2s ease',
+                  backgroundColor: isXRayActive ? 'rgba(59, 130, 246, 0.2)' : 'transparent'
+                }}
+                title={isXRayActive ? 'Hide X-ray' : 'Show X-ray'}
+              >
+                {isXRayActive ? <Eye size={16} fill="none" /> : <EyeOff size={16} fill="none" />}
+              </button>
+            )}
+
+            {/* Design Icon (placeholder) */}
+            <button
+              className="tool-button"
+              onClick={handleDesign}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#9ca3af',
+                cursor: 'pointer',
+                padding: '6px',
+                borderRadius: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'background-color 0.2s ease'
+              }}
+              title="Design (placeholder)"
+            >
+              <Paintbrush size={16} fill="none" />
+            </button>
           </div>
         </div>
         
-        <div style={{ maxHeight: '280px', overflow: 'auto' }}>
-          <button
-            className={`tool-button ${isSaving ? 'saving' : ''}`}
-            onClick={handleSave}
-            style={buttonStyles}
-            disabled={isSaving}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-              <polyline points="17,21 17,13 7,13 7,21"/>
-              <polyline points="7,3 7,8 15,8"/>
-            </svg>
-            {isSaving ? 'Saving...' : 'Save'}
-            {isSaving && <div className="shimmer-overlay" />}
-          </button>
-          
-          {onXRay && (
-            <button
-              className="tool-button"
-              onClick={handleXRay}
-              style={{
-                ...buttonStyles,
-                backgroundColor: isXRayActive ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
-                color: isXRayActive ? '#60a5fa' : 'white'
-              }}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/>
-                <circle cx="12" cy="12" r="3"/>
-              </svg>
-              {isXRayActive ? 'Hide X-ray' : 'X-ray'}
-            </button>
-          )}
-        </div>
+        {/* Design Properties Content - always visible for elements */}
+        {selectedElement.type === 'element' && designProperties && (
+          <div style={{ maxHeight: '400px', overflow: 'auto' }}>
+            {/* Typography Section */}
+            <div style={{ marginBottom: '20px' }}>
+              <div style={{ 
+                fontSize: '12px', 
+                fontWeight: '600', 
+                color: '#9ca3af', 
+                marginBottom: '12px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px'
+              }}>
+                Typography
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>Font</span>
+                  <span style={{ 
+                    fontSize: '11px', 
+                    color: 'white', 
+                    maxWidth: '200px', 
+                    textAlign: 'right', 
+                    overflow: 'hidden', 
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {formatFontFamily(designProperties.typography.fontFamily)}
+                  </span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>Size</span>
+                  <span style={{ fontSize: '11px', color: 'white' }}>
+                    {formatValue(designProperties.typography.fontSize)}
+                  </span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>Weight</span>
+                  <span style={{ fontSize: '11px', color: 'white' }}>
+                    {formatValue(designProperties.typography.fontWeight)}
+                  </span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>Line Height</span>
+                  <span style={{ fontSize: '11px', color: 'white' }}>
+                    {formatValue(designProperties.typography.lineHeight)}
+                  </span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>Align</span>
+                  <span style={{ fontSize: '11px', color: 'white' }}>
+                    {formatValue(designProperties.typography.textAlign)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Layout Section */}
+            <div style={{ marginBottom: '20px' }}>
+              <div style={{ 
+                fontSize: '12px', 
+                fontWeight: '600', 
+                color: '#9ca3af', 
+                marginBottom: '12px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px'
+              }}>
+                Layout
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>Display</span>
+                  <span style={{ fontSize: '11px', color: 'white' }}>
+                    {formatValue(designProperties.layout.display)}
+                  </span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>Width</span>
+                  <span style={{ fontSize: '11px', color: 'white' }}>
+                    {formatValue(designProperties.layout.width)}
+                  </span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>Height</span>
+                  <span style={{ fontSize: '11px', color: 'white' }}>
+                    {formatValue(designProperties.layout.height)}
+                  </span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>Padding</span>
+                  <span style={{ fontSize: '11px', color: 'white', fontFamily: 'monospace' }}>
+                    {[
+                      formatValue(designProperties.layout.padding.top),
+                      formatValue(designProperties.layout.padding.right),
+                      formatValue(designProperties.layout.padding.bottom),
+                      formatValue(designProperties.layout.padding.left)
+                    ].join(' ')}
+                  </span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>Margin</span>
+                  <span style={{ fontSize: '11px', color: 'white', fontFamily: 'monospace' }}>
+                    {[
+                      formatValue(designProperties.layout.margin.top),
+                      formatValue(designProperties.layout.margin.right),
+                      formatValue(designProperties.layout.margin.bottom),
+                      formatValue(designProperties.layout.margin.left)
+                    ].join(' ')}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Colors Section */}
+            <div>
+              <div style={{ 
+                fontSize: '12px', 
+                fontWeight: '600', 
+                color: '#9ca3af', 
+                marginBottom: '12px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px'
+              }}>
+                Colors
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>Text</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ 
+                      width: '16px', 
+                      height: '16px', 
+                      borderRadius: '3px', 
+                      backgroundColor: designProperties.colors.color,
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      flexShrink: 0
+                    }} />
+                    <span style={{ fontSize: '11px', color: 'white', fontFamily: 'monospace' }}>
+                      {formatColor(designProperties.colors.color)}
+                    </span>
+                  </div>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>Background</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ 
+                      width: '16px', 
+                      height: '16px', 
+                      borderRadius: '3px', 
+                      backgroundColor: designProperties.colors.backgroundColor,
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      flexShrink: 0
+                    }} />
+                    <span style={{ fontSize: '11px', color: 'white', fontFamily: 'monospace' }}>
+                      {formatColor(designProperties.colors.backgroundColor)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* For area selections, show a simple message */}
+        {selectedElement.type === 'area' && (
+          <div style={{ 
+            padding: '20px', 
+            textAlign: 'center', 
+            color: '#9ca3af', 
+            fontSize: '12px' 
+          }}>
+            Design properties are only available for individual elements
+          </div>
+        )}
       </div>
     </>
   )

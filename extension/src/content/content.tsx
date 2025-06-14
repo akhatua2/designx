@@ -49,9 +49,13 @@ function injectFloatingIcon() {
     /* Ensure SVG icons are visible */
     #floating-extension-icon svg {
       display: inline-block;
-      fill: currentColor;
       stroke: currentColor;
       vertical-align: middle;
+    }
+
+    /* Only apply fill to SVGs that don't have an explicit fill attribute */
+    #floating-extension-icon svg:not([fill]) {
+      fill: currentColor;
     }
 
     #floating-extension-icon {
