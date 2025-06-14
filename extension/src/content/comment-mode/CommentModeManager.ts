@@ -43,21 +43,65 @@ export interface SelectedElement {
   reactInfo?: ReactComponentInfo
 }
 
+export interface SelectedArea {
+  x: number
+  y: number
+  width: number
+  height: number
+  elementsInArea: Element[]
+}
+
+export interface SelectedRegion {
+  type: 'element' | 'area'
+  element?: Element
+  area?: SelectedArea
+  domPath: string
+  elementInfo: string
+  reactInfo?: ReactComponentInfo
+}
+
 export class CommentModeManager {
   private isActive = false
   private isPaused = false // New flag for pausing highlighting
   private hoveredElement: Element | null = null
   private originalCursor = ''
   private onStateChangeCallback: ((isActive: boolean) => void) | null = null
-  private onElementSelectedCallback: ((elementData: SelectedElement) => void) | null = null
+  private onElementSelectedCallback: ((elementData: SelectedRegion) => void) | null = null
   private overlayElement: HTMLElement | null = null
   private selectedElement: Element | null = null
+
+  // Rectangular selection state
+  private isDragging = false
+  private dragStartX = 0
+  private dragStartY = 0
+  private dragCurrentX = 0
+  private dragCurrentY = 0
+  private selectionRectangle: HTMLElement | null = null
+  private dragThreshold = 5 // Minimum pixels to start drag selection
 
   private readonly highlightStyles = {
     // No styles applied to selected element - keep it completely clean
   }
 
-  // Handle mouse move for highlighting elements
+  // Handle mouse down for starting rectangular selection
+  private handleMouseDown = (e: MouseEvent) => {
+    if (!this.isActive || this.isPaused) return
+    
+    const target = e.target as Element
+    
+    // Don't process clicks on the floating icon itself
+    if (target.closest('[data-floating-icon]')) return
+    
+    // Store initial mouse position for potential drag
+    this.dragStartX = e.clientX
+    this.dragStartY = e.clientY
+    this.dragCurrentX = e.clientX
+    this.dragCurrentY = e.clientY
+    
+    // Don't start dragging immediately - wait for mouse move
+  }
+
+  // Handle mouse move for highlighting elements and drag selection
   private handleMouseMove = (e: MouseEvent) => {
     if (!this.isActive || this.isPaused) return
     
@@ -66,6 +110,23 @@ export class CommentModeManager {
     // Don't highlight the floating icon itself or its children
     if (target.closest('[data-floating-icon]')) return
     
+    // Check if we should start dragging
+    if (!this.isDragging && e.buttons === 1) { // Left mouse button is pressed
+      const deltaX = Math.abs(e.clientX - this.dragStartX)
+      const deltaY = Math.abs(e.clientY - this.dragStartY)
+      
+      if (deltaX > this.dragThreshold || deltaY > this.dragThreshold) {
+        this.startDragSelection()
+      }
+    }
+    
+    // Handle drag selection
+    if (this.isDragging) {
+      this.updateDragSelection(e.clientX, e.clientY)
+      return // Skip hover highlighting during drag
+    }
+    
+    // Regular hover highlighting (only when not dragging)
     // Remove previous highlight
     if (this.hoveredElement && this.hoveredElement !== target) {
       this.removeHighlight(this.hoveredElement)
@@ -78,10 +139,21 @@ export class CommentModeManager {
     }
   }
 
-  // Handle click to select element for commenting
-  private handleElementClick = (e: MouseEvent) => {
+  // Handle mouse up for completing selection
+  private handleMouseUp = (e: MouseEvent) => {
     if (!this.isActive || this.isPaused) return
     
+    if (this.isDragging) {
+      this.completeDragSelection()
+      return
+    }
+    
+    // Handle regular element click (existing functionality)
+    this.handleElementClick(e)
+  }
+
+  // Handle click to select element for commenting (now only called for non-drag clicks)
+  private handleElementClick = (e: MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     
@@ -120,6 +192,7 @@ export class CommentModeManager {
     // Notify UI to show comment bubble
     if (this.onElementSelectedCallback) {
       this.onElementSelectedCallback({
+        type: 'element',
         element: target,
         domPath,
         elementInfo,
@@ -129,6 +202,134 @@ export class CommentModeManager {
 
     // Pause highlighting when comment bubble opens
     this.pause()
+  }
+
+  private startDragSelection() {
+    this.isDragging = true
+    
+    // Remove any existing hover highlights
+    if (this.hoveredElement) {
+      this.removeHighlight(this.hoveredElement)
+      this.hoveredElement = null
+    }
+    
+    // Create selection rectangle
+    this.createSelectionRectangle()
+    
+    console.log('🖱️ Started drag selection')
+  }
+
+  private updateDragSelection(currentX: number, currentY: number) {
+    this.dragCurrentX = currentX
+    this.dragCurrentY = currentY
+    
+    if (this.selectionRectangle) {
+      const left = Math.min(this.dragStartX, currentX)
+      const top = Math.min(this.dragStartY, currentY)
+      const width = Math.abs(currentX - this.dragStartX)
+      const height = Math.abs(currentY - this.dragStartY)
+      
+      this.selectionRectangle.style.left = `${left}px`
+      this.selectionRectangle.style.top = `${top}px`
+      this.selectionRectangle.style.width = `${width}px`
+      this.selectionRectangle.style.height = `${height}px`
+    }
+  }
+
+  private completeDragSelection() {
+    if (!this.selectionRectangle) return
+    
+    const left = Math.min(this.dragStartX, this.dragCurrentX)
+    const top = Math.min(this.dragStartY, this.dragCurrentY)
+    const width = Math.abs(this.dragCurrentX - this.dragStartX)
+    const height = Math.abs(this.dragCurrentY - this.dragStartY)
+    
+    // Find elements within the selected area
+    const elementsInArea = this.getElementsInArea(left, top, width, height)
+    
+    console.log('🎯 Drag selection completed:')
+    console.log('Area:', { x: left, y: top, width, height })
+    console.log('Elements in area:', elementsInArea.length)
+    
+    const selectedArea: SelectedArea = {
+      x: left,
+      y: top,
+      width,
+      height,
+      elementsInArea
+    }
+    
+    // Create a descriptive path for the area
+    const domPath = `area(${left},${top},${width}x${height})`
+    const elementInfo = `Selected area: ${width}×${height}px (${elementsInArea.length} elements)`
+    
+    // Replace blue drag rectangle with blur overlay highlighting the selected area
+    this.cleanupDragSelection()
+    this.createOverlay({ x: left, y: top, width, height })
+    
+    // Notify UI to show comment bubble
+    if (this.onElementSelectedCallback) {
+      this.onElementSelectedCallback({
+        type: 'area',
+        area: selectedArea,
+        domPath,
+        elementInfo
+      })
+    }
+    
+    // Pause highlighting when comment bubble opens
+    this.pause()
+  }
+
+  private createSelectionRectangle() {
+    this.selectionRectangle = document.createElement('div')
+    this.selectionRectangle.setAttribute('data-floating-icon', 'true')
+    this.selectionRectangle.style.cssText = `
+      position: fixed;
+      border: 2px solid #3b82f6;
+      background: rgba(59, 130, 246, 0.1);
+      z-index: 10001;
+      pointer-events: none;
+      border-radius: 4px;
+      box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3);
+    `
+    
+    document.body.appendChild(this.selectionRectangle)
+  }
+
+  private cleanupDragSelection() {
+    this.isDragging = false
+    
+    if (this.selectionRectangle) {
+      this.selectionRectangle.remove()
+      this.selectionRectangle = null
+    }
+  }
+
+  private getElementsInArea(x: number, y: number, width: number, height: number): Element[] {
+    const elements: Element[] = []
+    const allElements = document.querySelectorAll('*')
+    
+    for (const element of allElements) {
+      // Skip floating UI elements
+      if (element.closest('[data-floating-icon]')) continue
+      
+      const rect = element.getBoundingClientRect()
+      
+      // Check if element overlaps with selection area
+      const overlaps = !(
+        rect.right < x ||
+        rect.left > x + width ||
+        rect.bottom < y ||
+        rect.top > y + height
+      )
+      
+      if (overlaps) {
+        elements.push(element)
+      }
+    }
+    
+    return elements
   }
 
   private getElementInfo(element: Element): string {
@@ -155,6 +356,13 @@ export class CommentModeManager {
     
     if (e.key === 'Escape') {
       e.preventDefault()
+      
+      // If dragging, cancel the drag first
+      if (this.isDragging) {
+        this.cleanupDragSelection()
+        return
+      }
+      
       this.deactivate()
       console.log('🔑 Comment mode exited with ESC key')
     }
@@ -180,8 +388,11 @@ export class CommentModeManager {
     this.removeOverlay()
   }
 
-  private createOverlay(selectedElement: Element) {
-    const rect = selectedElement.getBoundingClientRect()
+  private createOverlay(target: Element | { x: number, y: number, width: number, height: number }) {
+    // Get bounds - either from element or from coordinates
+    const bounds = target instanceof Element 
+      ? target.getBoundingClientRect()
+      : { left: target.x, top: target.y, width: target.width, height: target.height }
     
     // Create main overlay container
     this.overlayElement = document.createElement('div')
@@ -197,8 +408,8 @@ export class CommentModeManager {
       transition: all 0.2s ease;
     `
 
-    // Create a rounded cutout area for the selected element
-    const padding = 8 // Add padding around the element
+    // Create a rounded cutout area for the selected element/area
+    const padding = 8 // Add padding around the element/area
     const borderRadius = 12 // Rounded corners
     
     // Create the blurred background that covers everything
@@ -214,10 +425,10 @@ export class CommentModeManager {
     `
 
     // Calculate cutout dimensions
-    const cutoutX = rect.left - padding
-    const cutoutY = rect.top - padding
-    const cutoutWidth = rect.width + (padding * 2)
-    const cutoutHeight = rect.height + (padding * 2)
+    const cutoutX = bounds.left - padding
+    const cutoutY = bounds.top - padding
+    const cutoutWidth = bounds.width + (padding * 2)
+    const cutoutHeight = bounds.height + (padding * 2)
 
     // Use CSS mask to create rounded cutout
     const maskSVG = `
@@ -243,6 +454,8 @@ export class CommentModeManager {
     document.body.appendChild(this.overlayElement)
   }
 
+
+
   private removeOverlay() {
     if (this.overlayElement) {
       this.overlayElement.remove()
@@ -256,6 +469,7 @@ export class CommentModeManager {
       this.hoveredElement = null
     }
     this.removeOverlay()
+    this.cleanupDragSelection()
   }
 
   private notifyStateChange() {
@@ -271,13 +485,14 @@ export class CommentModeManager {
     this.isPaused = false
     this.originalCursor = document.body.style.cursor
     
+    document.addEventListener('mousedown', this.handleMouseDown, true)
     document.addEventListener('mousemove', this.handleMouseMove, true)
-    document.addEventListener('click', this.handleElementClick, true)
+    document.addEventListener('mouseup', this.handleMouseUp, true)
     document.addEventListener('keydown', this.handleKeyDown, true)
     document.body.style.cursor = 'crosshair'
     
     this.notifyStateChange()
-    console.log('💬 Comment mode activated - hover over elements to highlight, click to add comment, press ESC to exit')
+    console.log('💬 Comment mode activated - hover over elements to highlight, click to select element, or drag to select area. Press ESC to exit')
   }
 
   public deactivate() {
@@ -286,8 +501,9 @@ export class CommentModeManager {
     this.isActive = false
     this.isPaused = false
     
+    document.removeEventListener('mousedown', this.handleMouseDown, true)
     document.removeEventListener('mousemove', this.handleMouseMove, true)
-    document.removeEventListener('click', this.handleElementClick, true)
+    document.removeEventListener('mouseup', this.handleMouseUp, true)
     document.removeEventListener('keydown', this.handleKeyDown, true)
     document.body.style.cursor = this.originalCursor
     
@@ -334,7 +550,7 @@ export class CommentModeManager {
     this.onStateChangeCallback = callback
   }
 
-  public onElementSelected(callback: (elementData: SelectedElement) => void) {
+  public onElementSelected(callback: (elementData: SelectedRegion) => void) {
     this.onElementSelectedCallback = callback
   }
 

@@ -1,5 +1,6 @@
 export interface ScreenshotOptions {
-  element: Element
+  element?: Element
+  area?: { x: number, y: number, width: number, height: number }
   padding?: number
   quality?: number
   format?: 'png' | 'jpeg'
@@ -15,27 +16,37 @@ export class ScreenshotCapture {
   private static readonly API_BASE = 'https://designx-705035175306.us-central1.run.app'
 
   /**
-   * Capture a screenshot of the specified element by taking full tab screenshot and cropping
+   * Capture a screenshot of the specified element or area by taking full tab screenshot and cropping
    */
   static async captureElement(options: ScreenshotOptions): Promise<ScreenshotResult> {
-    const { element, padding = 10, quality = 0.8, format = 'png' } = options
+    const { element, area, padding = 10, quality = 0.8, format = 'png' } = options
+
+    if (!element && !area) {
+      return { success: false, error: 'Either element or area must be provided' }
+    }
 
     try {
       console.log('📸 Starting tab capture and crop...')
 
-      // Scroll element into view and wait
-      element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      await new Promise(resolve => setTimeout(resolve, 500))
+      let bounds: DOMRect | { x: number, y: number, width: number, height: number }
 
-      // Get element position after scroll
-      const rect = element.getBoundingClientRect()
+      if (element) {
+        // Scroll element into view and wait
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        await new Promise(resolve => setTimeout(resolve, 500))
+        bounds = element.getBoundingClientRect()
+      } else {
+        // Use provided area coordinates
+        bounds = { x: area!.x, y: area!.y, width: area!.width, height: area!.height }
+      }
+
       const devicePixelRatio = window.devicePixelRatio || 1
       
-      console.log('📐 Element position:', {
-        width: rect.width,
-        height: rect.height,
-        x: rect.x,
-        y: rect.y,
+      console.log('📐 Target bounds:', {
+        width: bounds.width,
+        height: bounds.height,
+        x: bounds.x,
+        y: bounds.y,
         devicePixelRatio
       })
 
@@ -50,10 +61,10 @@ export class ScreenshotCapture {
         chrome.runtime.sendMessage({
           action: 'captureTab',
           elementBounds: {
-            x: Math.max(0, rect.x - padding),
-            y: Math.max(0, rect.y - padding),
-            width: rect.width + (padding * 2),
-            height: rect.height + (padding * 2)
+            x: Math.max(0, bounds.x - padding),
+            y: Math.max(0, bounds.y - padding),
+            width: bounds.width + (padding * 2),
+            height: bounds.height + (padding * 2)
           },
           devicePixelRatio,
           quality,
@@ -106,6 +117,8 @@ export class ScreenshotCapture {
       }
     }
   }
+
+
 
   /**
    * Convert data URL to blob

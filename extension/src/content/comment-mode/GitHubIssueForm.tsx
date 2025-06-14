@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Send, Github, ChevronDown } from 'lucide-react'
-import type { SelectedElement } from './CommentModeManager'
+import type { SelectedRegion } from './CommentModeManager'
 import { ScreenshotCapture } from './ScreenshotCapture'
 import { gitHubModeManager } from '../integrations/github'
 import type { GitHubRepo } from '../integrations/github/GitHubModeManager'
 
 interface GitHubIssueFormProps {
-  selectedElement: SelectedElement
+  selectedElement: SelectedRegion
   comment: string
   onCommentChange: (comment: string) => void
   onSubmit: (comment: string, externalUrl?: string, externalId?: string) => void
@@ -92,16 +92,24 @@ const GitHubIssueForm: React.FC<GitHubIssueFormProps> = ({
       let screenshotUrl: string | null = null
       try {
         console.log('📸 Automatically capturing screenshot for GitHub issue...')
-        const result = await ScreenshotCapture.captureElement({
-          element: selectedElement.element
-        })
-        if (result.success && result.imageUrl) {
+        let result
+        if (selectedElement.type === 'element' && selectedElement.element) {
+          result = await ScreenshotCapture.captureElement({
+            element: selectedElement.element
+          })
+        } else if (selectedElement.type === 'area' && selectedElement.area) {
+          result = await ScreenshotCapture.captureElement({
+            area: selectedElement.area
+          })
+        }
+        
+        if (result?.success && result.imageUrl) {
           screenshotUrl = result.imageUrl
           console.log('✅ Screenshot captured:', screenshotUrl)
           // Track this screenshot for task linking
           onScreenshotUploaded(screenshotUrl)
         } else {
-          console.warn('⚠️ Screenshot capture failed:', result.error)
+          console.warn('⚠️ Screenshot capture failed:', result?.error)
         }
       } catch (error) {
         console.warn('⚠️ Failed to capture screenshot, continuing without it:', error)
@@ -111,7 +119,7 @@ const GitHubIssueForm: React.FC<GitHubIssueFormProps> = ({
       const title = `[${priority}] UI Feedback: ${comment.trim().substring(0, 50)}${comment.trim().length > 50 ? '...' : ''}`
       
       // Create a professional formatted body with React info
-      const reactSection = selectedElement.reactInfo?.isReactElement ? `
+      const reactSection = selectedElement.type === 'element' && selectedElement.reactInfo?.isReactElement ? `
 
 **React Component:**
 \`\`\`
@@ -135,6 +143,14 @@ ${selectedElement.reactInfo.hooks && selectedElement.reactInfo.hooks.length > 0 
 \`\`\`json
 ${JSON.stringify(selectedElement.reactInfo.hooks, null, 2)}
 \`\`\`` : ''}
+` : ''
+
+      const areaSection = selectedElement.type === 'area' && selectedElement.area ? `
+
+**Selected Area:**
+- **Position:** (${selectedElement.area.x}, ${selectedElement.area.y})
+- **Size:** ${selectedElement.area.width} × ${selectedElement.area.height} pixels
+- **Elements in area:** ${selectedElement.area.elementsInArea.length}
 ` : ''
 
       const screenshotSection = screenshotUrl ? `
@@ -166,6 +182,8 @@ ${figmaSection}${screenshotSection}
 <details>
 <summary>Click to view technical information</summary>
 
+**Selection Type:** ${selectedElement.type === 'element' ? 'Single Element' : 'Area Selection'}
+
 **Element Information:**
 \`\`\`
 ${selectedElement.elementInfo}
@@ -175,7 +193,7 @@ ${selectedElement.elementInfo}
 \`\`\`
 ${selectedElement.domPath}
 \`\`\`
-${reactSection}
+${reactSection}${areaSection}
 **Page URL:** ${window.location.href}
 
 **Timestamp:** ${new Date().toISOString()}

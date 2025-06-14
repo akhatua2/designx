@@ -1,2 +1,2 @@
-export { CommentModeManager, commentModeManager, type SelectedElement } from './CommentModeManager'
+export { CommentModeManager, commentModeManager, type SelectedElement, type SelectedRegion, type SelectedArea } from './CommentModeManager'
 export { default as CommentBubble } from './CommentBubble' 

@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { X, Github, Slack } from 'lucide-react'
-import type { SelectedElement } from './CommentModeManager'
+import type { SelectedRegion } from './CommentModeManager'
 import GitHubIssueForm from './GitHubIssueForm'
 import SlackMessageForm from './SlackMessageForm'
 import JiraIssueForm from './JiraIssueForm'
 
 interface CommentBubbleProps {
-  selectedElement: SelectedElement | null
+  selectedElement: SelectedRegion | null
   onClose: () => void
 }
 
@@ -35,8 +35,13 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
     if (!selectedElement) return null
     
     console.log('💬 Comment submitted:')
-    console.log('Element:', selectedElement.elementInfo)
+    console.log('Selection type:', selectedElement.type)
+    console.log('Element info:', selectedElement.elementInfo)
     console.log('DOM Path:', selectedElement.domPath)
+    if (selectedElement.type === 'area' && selectedElement.area) {
+      console.log('Selected area:', selectedElement.area)
+      console.log('Elements in area:', selectedElement.area.elementsInArea.length)
+    }
     console.log('Comment:', submittedComment)
     console.log('Platform:', platform)
     console.log('Screenshots to link:', uploadedScreenshots.length)
@@ -65,6 +70,8 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
             dom_path: selectedElement.domPath,
             page_url: window.location.href,
             screenshot_urls: uploadedScreenshots,
+            selection_type: selectedElement.type,
+            selected_area: selectedElement.type === 'area' ? selectedElement.area : undefined,
             metadata: {
               timestamp: new Date().toISOString(),
               user_agent: navigator.userAgent
@@ -167,8 +174,6 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
     alignItems: 'center',
     marginBottom: '6px'
   }
-
-
 
   const platformSelectorStyles = {
     display: 'flex',

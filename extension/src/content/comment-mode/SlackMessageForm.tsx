@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Send, Slack, ChevronDown } from 'lucide-react'
-import type { SelectedElement } from './CommentModeManager'
+import type { SelectedRegion } from './CommentModeManager'
 import { slackModeManager } from '../integrations/slack'
 import type { SlackChannel } from '../integrations/slack/SlackModeManager'
 
 interface SlackMessageFormProps {
-  selectedElement: SelectedElement
+  selectedElement: SelectedRegion
   comment: string
   onCommentChange: (comment: string) => void
   onSubmit: (comment: string, externalUrl?: string, externalId?: string) => void

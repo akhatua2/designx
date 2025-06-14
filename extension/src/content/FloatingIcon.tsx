@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { MessageCircle, Edit3, Github, MessageSquare, Slack, User } from 'lucide-react'
 import { editModeManager } from './edit-mode'
-import { commentModeManager, type SelectedElement, CommentBubble } from './comment-mode'
+import { commentModeManager, type SelectedRegion, CommentBubble } from './comment-mode'
 import { gitHubModeManager, type GitHubUser, GitHubBubble } from './integrations/github'
 import { slackModeManager, type SlackUser, type SlackMessage, SlackBubble } from './integrations/slack'
 import { jiraModeManager, type JiraUser, type JiraIssue, JiraBubble } from './integrations/jira'
@@ -99,7 +99,7 @@ const styles = {
 
 const FloatingIcon: React.FC = () => {
   const [selectedIcon, setSelectedIcon] = useState<string | null>(null)
-  const [selectedElement, setSelectedElement] = useState<SelectedElement | null>(null)
+  const [selectedElement, setSelectedElement] = useState<SelectedRegion | null>(null)
   const [isHovered, setIsHovered] = useState(false)
   const [showUserBubble, setShowUserBubble] = useState(false)
   

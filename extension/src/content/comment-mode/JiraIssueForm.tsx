@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Send, ChevronDown } from 'lucide-react'
-import type { SelectedElement } from './CommentModeManager'
+import type { SelectedRegion } from './CommentModeManager'
 import { jiraModeManager } from '../integrations/jira'
 import type { JiraProject } from '../integrations/jira/JiraModeManager'
 
 interface JiraIssueFormProps {
-  selectedElement: SelectedElement
+  selectedElement: SelectedRegion
   comment: string
   onCommentChange: (comment: string) => void
   onSubmit: (comment: string, externalUrl?: string, externalId?: string) => void
