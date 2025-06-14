@@ -496,6 +496,14 @@ const FloatingIcon: React.FC = () => {
           isSaving={isSaving}
           onXRay={handleToolXRay}
           isXRayActive={isXRayActive}
+          onClose={() => {
+            setSelectedElement(null)
+            setIsXRayActive(false) // Also turn off X-ray when closing
+            // Resume comment mode highlighting so user can select something else
+            if (commentModeManager.isCommentModeActive()) {
+              commentModeManager.resume()
+            }
+          }}
         />
       )}
       

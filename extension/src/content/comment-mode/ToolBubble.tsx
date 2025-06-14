@@ -1,5 +1,5 @@
 import React from 'react'
-import { ArrowDownToLine, Eye, EyeOff, Paintbrush, Loader2 } from 'lucide-react'
+import { ArrowDownToLine, Eye, EyeOff, Paintbrush, Loader2, X } from 'lucide-react'
 import type { SelectedRegion } from './CommentModeManager'
 
 interface ToolBubbleProps {
@@ -8,6 +8,7 @@ interface ToolBubbleProps {
   isSaving?: boolean
   onXRay?: () => void
   isXRayActive?: boolean
+  onClose?: () => void
 }
 
 interface DesignProperties {
@@ -36,7 +37,7 @@ interface DesignProperties {
   }
 }
 
-const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSaving = false, onXRay, isXRayActive = false }) => {
+const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSaving = false, onXRay, isXRayActive = false, onClose }) => {
   if (!selectedElement) return null
 
   // Extract design properties from the selected element
@@ -111,7 +112,7 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
   // Smart positioning that avoids CommentBubble and stays in viewport
   const getPosition = () => {
     const bubbleWidth = 300
-    const bubbleHeight = 400 // Estimated height for collision detection
+    const bubbleHeight = 500 // Estimated height for collision detection
     const spacing = 20
     const viewportPadding = 10
     
@@ -210,7 +211,7 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
     top: `${position.top}px`,
     left: `${position.left}px`,
     width: '300px',
-    maxHeight: '400px', // Prevent it from getting too tall
+    maxHeight: '500px', // Increased to fit all design properties without scrolling
     borderRadius: '12px',
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
     backdropFilter: 'blur(12px)',
@@ -276,6 +277,13 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
   const handleDesign = () => {
     console.log('🎨 Design icon clicked (placeholder)')
     // This is just a placeholder for now
+  }
+
+  const handleClose = () => {
+    console.log('❌ Close selection clicked')
+    if (onClose) {
+      onClose()
+    }
   }
 
   return (
@@ -347,7 +355,7 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
         `}
       </style>
       <div style={bubbleStyles} data-floating-icon="true">
-        {/* Header with 3 action icons */}
+        {/* Header with 3 action icons and close button */}
         <div style={headerStyles}>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             {/* Save Icon */}
@@ -420,11 +428,40 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
               <Paintbrush size={16} fill="none" />
             </button>
           </div>
+
+          {/* Close Button */}
+          <button
+            className="tool-button"
+            onClick={handleClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'rgba(255, 255, 255, 0.6)',
+              cursor: 'pointer',
+              padding: '6px',
+              borderRadius: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s ease'
+            }}
+            title="Close selection"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)'
+              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)'
+              e.currentTarget.style.backgroundColor = 'transparent'
+            }}
+          >
+            <X size={14} fill="none" />
+          </button>
         </div>
         
         {/* Design Properties Content - always visible for elements */}
         {selectedElement.type === 'element' && designProperties && (
-          <div style={{ maxHeight: '400px', overflow: 'auto' }}>
+          <div style={{ overflow: 'visible' }}>
             {/* Typography Section */}
             <div style={{ marginBottom: '20px' }}>
               <div style={{ 
