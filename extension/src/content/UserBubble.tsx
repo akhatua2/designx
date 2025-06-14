@@ -287,7 +287,6 @@ const UserBubble: React.FC<UserBubbleProps> = ({
       <div style={bubbleStyles} data-floating-icon="true">
         <div style={headerStyles}>
           <div style={titleStyles}>
-            <User size={16} />
             My Tasks
           </div>
           <button
