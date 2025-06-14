@@ -68,6 +68,7 @@ export class CommentModeManager {
   private onStateChangeCallback: ((isActive: boolean) => void) | null = null
   private onElementSelectedCallback: ((elementData: SelectedRegion) => void) | null = null
   private onToolActionCallback: ((action: string, elementData: SelectedRegion) => void) | null = null
+  private onCleanupCallback: (() => void) | null = null  // Add cleanup callback
   private overlayElement: HTMLElement | null = null
   private selectedElement: Element | null = null
 
@@ -455,8 +456,6 @@ export class CommentModeManager {
     document.body.appendChild(this.overlayElement)
   }
 
-
-
   private removeOverlay() {
     if (this.overlayElement) {
       this.overlayElement.remove()
@@ -501,6 +500,11 @@ export class CommentModeManager {
     
     this.isActive = false
     this.isPaused = false
+    
+    // Notify any active components to cleanup (like text editing)
+    if (this.onCleanupCallback) {
+      this.onCleanupCallback()
+    }
     
     document.removeEventListener('mousedown', this.handleMouseDown, true)
     document.removeEventListener('mousemove', this.handleMouseMove, true)
@@ -559,11 +563,16 @@ export class CommentModeManager {
     this.onToolActionCallback = callback
   }
 
+  public onCleanup(callback: () => void) {
+    this.onCleanupCallback = callback
+  }
+
   public cleanup() {
     this.deactivate()
     this.onStateChangeCallback = null
     this.onElementSelectedCallback = null
     this.onToolActionCallback = null
+    this.onCleanupCallback = null
   }
 }
 

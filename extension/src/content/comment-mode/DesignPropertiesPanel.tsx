@@ -2,6 +2,7 @@ import React from 'react'
 import type { SelectedRegion } from './CommentModeManager'
 import { useDesignChanges, type DesignChange } from './hooks/useDesignChanges'
 import { usePropertyHandlers } from './hooks/usePropertyHandlers'
+import { commentModeManager } from './index'  // Import comment mode manager
 import TypographySection from './components/TypographySection'
 import LayoutSection from './components/LayoutSection'
 import ColorsSection from './components/ColorsSection'
@@ -39,6 +40,82 @@ interface DesignPropertiesPanelProps {
   onDesignChange?: (changes: DesignChange[]) => void
 }
 
+// Extract styles to prevent recreation on every render
+const styles = {
+  noElementContainer: {
+    flex: 1,
+    overflow: 'auto' as const,
+    padding: '8px',
+    display: 'flex',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: '12px'
+  },
+  mainContainer: {
+    flex: 1,
+    overflow: 'auto' as const,
+    padding: '8px',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '20px'
+  }
+} as const
+
+// Memoized CSS styles component
+const GlobalStyles = React.memo(() => (
+  <style>
+    {`
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        height: 14px;
+        width: 14px;
+        border-radius: 50%;
+        background: #60a5fa;
+        cursor: pointer;
+        border: 2px solid #1e40af;
+      }
+      
+      input[type="range"]::-moz-range-thumb {
+        height: 14px;
+        width: 14px;
+        border-radius: 50%;
+        background: #60a5fa;
+        cursor: pointer;
+        border: 2px solid #1e40af;
+        box-sizing: border-box;
+      }
+      
+      input[type="color"] {
+        width: 24px;
+        height: 24px;
+        border-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: none;
+        cursor: pointer;
+        outline: none;
+        padding: 0;
+      }
+      
+      input[type="color"]::-webkit-color-swatch-wrapper {
+        padding: 0;
+        border-radius: 3px;
+      }
+      
+      input[type="color"]::-webkit-color-swatch {
+        border: none;
+        border-radius: 3px;
+      }
+      
+      input[type="color"]::-moz-color-swatch {
+        border: none;
+        border-radius: 3px;
+      }
+    `}
+  </style>
+))
+
 const DesignPropertiesPanel: React.FC<DesignPropertiesPanelProps> = ({ 
   selectedElement, 
   isDesignMode,
@@ -61,10 +138,31 @@ const DesignPropertiesPanel: React.FC<DesignPropertiesPanelProps> = ({
     handleBackgroundColorChange,
     handlePaddingChange,
     handleBorderRadiusChange,
-    hasTextContent
-  } = usePropertyHandlers(selectedElement, logDesignChange)
+    hasTextContent,
+    isCurrentlyEditingText,
+    forceCleanupTextEdit
+  } = usePropertyHandlers(selectedElement, logDesignChange, isDesignMode)
 
-  const getDesignProperties = (): DesignProperties | null => {
+  // Single useEffect for cleanup registration - more efficient
+  React.useEffect(() => {
+    // Register cleanup callback with comment mode manager
+    commentModeManager.onCleanup(() => {
+      console.log('💬 Comment mode cleanup triggered, forcing text edit cleanup')
+      forceCleanupTextEdit()
+    })
+    
+    // Cleanup on unmount or when forceCleanupTextEdit changes
+    return () => {
+      if (isCurrentlyEditingText) {
+        forceCleanupTextEdit()
+      }
+      // Clear the callback
+      commentModeManager.onCleanup(() => {})
+    }
+  }, [forceCleanupTextEdit, isCurrentlyEditingText])
+
+  // Memoize expensive design properties calculation
+  const designProperties = React.useMemo((): DesignProperties | null => {
     if (selectedElement.type === 'element' && selectedElement.element) {
       const element = selectedElement.element as HTMLElement
       const computedStyle = window.getComputedStyle(element)
@@ -111,22 +209,14 @@ const DesignPropertiesPanel: React.FC<DesignPropertiesPanelProps> = ({
       }
     }
     return null
-  }
+  }, [selectedElement])
 
-  const designProperties = getDesignProperties()
+  // Memoize hasTextContent result
+  const hasTextContentMemo = React.useMemo(() => hasTextContent(), [hasTextContent])
   
   if (!designProperties) {
     return (
-      <div style={{
-        flex: 1,
-        overflow: 'auto',
-        padding: '8px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: 'rgba(255, 255, 255, 0.5)',
-        fontSize: '12px'
-      }}>
+      <div style={styles.noElementContainer}>
         No element selected
       </div>
     )
@@ -134,65 +224,9 @@ const DesignPropertiesPanel: React.FC<DesignPropertiesPanelProps> = ({
 
   return (
     <>
-      <style>
-        {`
-          input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            height: 14px;
-            width: 14px;
-            border-radius: 50%;
-            background: #60a5fa;
-            cursor: pointer;
-            border: 2px solid #1e40af;
-          }
-          
-          input[type="range"]::-moz-range-thumb {
-            height: 14px;
-            width: 14px;
-            border-radius: 50%;
-            background: #60a5fa;
-            cursor: pointer;
-            border: 2px solid #1e40af;
-            box-sizing: border-box;
-          }
-          
-          input[type="color"] {
-            width: 24px;
-            height: 24px;
-            border-radius: 4px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            background: none;
-            cursor: pointer;
-            outline: none;
-            padding: 0;
-          }
-          
-          input[type="color"]::-webkit-color-swatch-wrapper {
-            padding: 0;
-            border-radius: 3px;
-          }
-          
-          input[type="color"]::-webkit-color-swatch {
-            border: none;
-            border-radius: 3px;
-          }
-          
-          input[type="color"]::-moz-color-swatch {
-            border: none;
-            border-radius: 3px;
-          }
-        `}
-      </style>
+      <GlobalStyles />
       
-      <div style={{
-        flex: 1,
-        overflow: 'auto',
-        padding: '8px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '20px'
-      }}>
+      <div style={styles.mainContainer}>
         <TypographySection
           selectedElement={selectedElement}
           designProperties={designProperties}
@@ -200,7 +234,7 @@ const DesignPropertiesPanel: React.FC<DesignPropertiesPanelProps> = ({
           currentFontSize={currentFontSize}
           currentFontWeight={currentFontWeight}
           currentTextAlign={currentTextAlign}
-          hasTextContent={hasTextContent()}
+          hasTextContent={hasTextContentMemo}
           onFontSizeChange={handleFontSizeChange}
           onFontWeightChange={handleFontWeightChange}
           onTextAlignChange={handleTextAlignChange}
@@ -222,7 +256,7 @@ const DesignPropertiesPanel: React.FC<DesignPropertiesPanelProps> = ({
           isDesignMode={isDesignMode}
           currentTextColor={currentTextColor}
           currentBackgroundColor={currentBackgroundColor}
-          hasTextContent={hasTextContent()}
+          hasTextContent={hasTextContentMemo}
           onTextColorChange={handleTextColorChange}
           onBackgroundColorChange={handleBackgroundColorChange}
         />
@@ -233,4 +267,4 @@ const DesignPropertiesPanel: React.FC<DesignPropertiesPanelProps> = ({
   )
 }
 
-export default DesignPropertiesPanel 
+export default React.memo(DesignPropertiesPanel) 

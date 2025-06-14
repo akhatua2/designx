@@ -28,7 +28,102 @@ interface TypographySectionProps {
   onTextAlignChange: (align: string) => void
 }
 
-const TypographySection: React.FC<TypographySectionProps> = ({
+// Extract styles to prevent recreation on every render
+const styles = {
+  sectionTitle: {
+    fontSize: '12px',
+    fontWeight: '600' as const,
+    color: '#9ca3af',
+    marginBottom: '12px',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.5px'
+  },
+  container: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '8px'
+  },
+  row: {
+    display: 'flex',
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const
+  },
+  label: {
+    fontSize: '11px',
+    color: '#9ca3af'
+  },
+  value: {
+    fontSize: '11px',
+    color: 'white'
+  },
+  rangeContainer: {
+    display: 'flex',
+    alignItems: 'center' as const,
+    gap: '8px',
+    flex: 1,
+    justifyContent: 'flex-end' as const
+  },
+  rangeInput: {
+    width: '80px',
+    height: '3px',
+    borderRadius: '2px',
+    background: 'rgba(255, 255, 255, 0.2)',
+    outline: 'none',
+    cursor: 'pointer',
+    appearance: 'none' as const,
+    WebkitAppearance: 'none' as const
+  },
+  rangeValue: {
+    fontSize: '11px',
+    color: 'white',
+    minWidth: '30px',
+    textAlign: 'right' as const
+  },
+  select: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    borderRadius: '4px',
+    color: 'white',
+    fontSize: '11px',
+    padding: '2px 6px',
+    cursor: 'pointer',
+    outline: 'none'
+  },
+  option: {
+    backgroundColor: '#1f2937',
+    color: 'white'
+  },
+  buttonContainer: {
+    display: 'flex',
+    gap: '4px'
+  },
+  alignButton: {
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    borderRadius: '3px',
+    color: 'white',
+    fontSize: '10px',
+    padding: '2px 6px',
+    cursor: 'pointer',
+    outline: 'none'
+  }
+} as const
+
+// Memoized font weight options to prevent recreation
+const fontWeightOptions = [
+  { value: '100', label: 'Thin' },
+  { value: '200', label: 'Extra Light' },
+  { value: '300', label: 'Light' },
+  { value: '400', label: 'Normal' },
+  { value: '500', label: 'Medium' },
+  { value: '600', label: 'Semi Bold' },
+  { value: '700', label: 'Bold' },
+  { value: '800', label: 'Extra Bold' },
+  { value: '900', label: 'Black' }
+] as const
+
+const textAlignOptions = ['left', 'center', 'right', 'justify'] as const
+
+const TypographySection: React.FC<TypographySectionProps> = React.memo(({
   selectedElement,
   designProperties,
   isDesignMode,
@@ -40,124 +135,105 @@ const TypographySection: React.FC<TypographySectionProps> = ({
   onFontWeightChange,
   onTextAlignChange
 }) => {
+  // Memoize expensive variable display calculations
+  const fontSizeDisplay = React.useMemo(() => 
+    getVariableDisplayInfo(selectedElement.element as HTMLElement, 'font-size', designProperties.typography.fontSize),
+    [selectedElement.element, designProperties.typography.fontSize]
+  )
+
+  const fontWeightDisplay = React.useMemo(() => 
+    getVariableDisplayInfo(selectedElement.element as HTMLElement, 'font-weight', designProperties.typography.fontWeight),
+    [selectedElement.element, designProperties.typography.fontWeight]
+  )
+
+  const lineHeightDisplay = React.useMemo(() => 
+    getVariableDisplayInfo(selectedElement.element as HTMLElement, 'line-height', designProperties.typography.lineHeight),
+    [selectedElement.element, designProperties.typography.lineHeight]
+  )
+
   return (
     <div>
-      <div style={{ 
-        fontSize: '12px', 
-        fontWeight: '600', 
-        color: '#9ca3af', 
-        marginBottom: '12px',
-        textTransform: 'uppercase',
-        letterSpacing: '0.5px'
-      }}>
+      <div style={styles.sectionTitle}>
         Typography
       </div>
       
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: '11px', color: '#9ca3af' }}>Font Family</span>
-          <span style={{ fontSize: '11px', color: 'white' }}>
+      <div style={styles.container}>
+        <div style={styles.row}>
+          <span style={styles.label}>Font Family</span>
+          <span style={styles.value}>
             {formatFontFamily(designProperties.typography.fontFamily)}
           </span>
         </div>
         
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: '11px', color: '#9ca3af' }}>Font Size</span>
+        <div style={styles.row}>
+          <span style={styles.label}>Font Size</span>
           {isDesignMode && hasTextContent ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, justifyContent: 'flex-end' }}>
+            <div style={styles.rangeContainer}>
               <input
                 type="range"
                 value={currentFontSize}
                 onChange={(e) => onFontSizeChange(e.target.value)}
                 min="8"
                 max="72"
-                style={{
-                  width: '80px',
-                  height: '3px',
-                  borderRadius: '2px',
-                  background: 'rgba(255, 255, 255, 0.2)',
-                  outline: 'none',
-                  cursor: 'pointer',
-                  appearance: 'none',
-                  WebkitAppearance: 'none'
-                }}
+                style={styles.rangeInput}
               />
-              <span style={{ fontSize: '11px', color: 'white', minWidth: '30px', textAlign: 'right' }}>
+              <span style={styles.rangeValue}>
                 {currentFontSize}px
               </span>
             </div>
           ) : (
-            <span style={{ fontSize: '11px', color: 'white' }}>
-              <VariableDisplay {...getVariableDisplayInfo(selectedElement.element as HTMLElement, 'font-size', designProperties.typography.fontSize)} />
+            <span style={styles.value}>
+              <VariableDisplay {...fontSizeDisplay} />
             </span>
           )}
         </div>
         
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: '11px', color: '#9ca3af' }}>Font Weight</span>
+        <div style={styles.row}>
+          <span style={styles.label}>Font Weight</span>
           {isDesignMode && hasTextContent ? (
             <select
               value={currentFontWeight}
               onChange={(e) => onFontWeightChange(e.target.value)}
-              style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                borderRadius: '4px',
-                color: 'white',
-                fontSize: '11px',
-                padding: '2px 6px',
-                cursor: 'pointer',
-                outline: 'none'
-              }}
+              style={styles.select}
             >
-              <option value="100" style={{ backgroundColor: '#1f2937', color: 'white' }}>Thin</option>
-              <option value="200" style={{ backgroundColor: '#1f2937', color: 'white' }}>Extra Light</option>
-              <option value="300" style={{ backgroundColor: '#1f2937', color: 'white' }}>Light</option>
-              <option value="400" style={{ backgroundColor: '#1f2937', color: 'white' }}>Normal</option>
-              <option value="500" style={{ backgroundColor: '#1f2937', color: 'white' }}>Medium</option>
-              <option value="600" style={{ backgroundColor: '#1f2937', color: 'white' }}>Semi Bold</option>
-              <option value="700" style={{ backgroundColor: '#1f2937', color: 'white' }}>Bold</option>
-              <option value="800" style={{ backgroundColor: '#1f2937', color: 'white' }}>Extra Bold</option>
-              <option value="900" style={{ backgroundColor: '#1f2937', color: 'white' }}>Black</option>
+              {fontWeightOptions.map(({ value, label }) => (
+                <option key={value} value={value} style={styles.option}>
+                  {label}
+                </option>
+              ))}
             </select>
           ) : (
-            <span style={{ fontSize: '11px', color: 'white' }}>
-              <VariableDisplay {...getVariableDisplayInfo(selectedElement.element as HTMLElement, 'font-weight', designProperties.typography.fontWeight)} />
+            <span style={styles.value}>
+              <VariableDisplay {...fontWeightDisplay} />
             </span>
           )}
         </div>
         
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: '11px', color: '#9ca3af' }}>Line Height</span>
-          <span style={{ fontSize: '11px', color: 'white' }}>
-            <VariableDisplay {...getVariableDisplayInfo(selectedElement.element as HTMLElement, 'line-height', designProperties.typography.lineHeight)} />
+        <div style={styles.row}>
+          <span style={styles.label}>Line Height</span>
+          <span style={styles.value}>
+            <VariableDisplay {...lineHeightDisplay} />
           </span>
         </div>
         
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: '11px', color: '#9ca3af' }}>Letter Spacing</span>
-          <span style={{ fontSize: '11px', color: 'white' }}>
+        <div style={styles.row}>
+          <span style={styles.label}>Letter Spacing</span>
+          <span style={styles.value}>
             {formatValue(designProperties.typography.letterSpacing)}
           </span>
         </div>
         
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: '11px', color: '#9ca3af' }}>Text Align</span>
+        <div style={styles.row}>
+          <span style={styles.label}>Text Align</span>
           {isDesignMode && hasTextContent ? (
-            <div style={{ display: 'flex', gap: '4px' }}>
-              {['left', 'center', 'right', 'justify'].map((align) => (
+            <div style={styles.buttonContainer}>
+              {textAlignOptions.map((align) => (
                 <button
                   key={align}
                   onClick={() => onTextAlignChange(align)}
                   style={{
-                    backgroundColor: currentTextAlign === align ? 'rgba(96, 165, 250, 0.3)' : 'rgba(255, 255, 255, 0.1)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    borderRadius: '3px',
-                    color: 'white',
-                    fontSize: '10px',
-                    padding: '2px 6px',
-                    cursor: 'pointer',
-                    outline: 'none'
+                    ...styles.alignButton,
+                    backgroundColor: currentTextAlign === align ? 'rgba(96, 165, 250, 0.3)' : 'rgba(255, 255, 255, 0.1)'
                   }}
                   title={`Align ${align}`}
                 >
@@ -166,7 +242,7 @@ const TypographySection: React.FC<TypographySectionProps> = ({
               ))}
             </div>
           ) : (
-            <span style={{ fontSize: '11px', color: 'white' }}>
+            <span style={styles.value}>
               {formatValue(designProperties.typography.textAlign)}
             </span>
           )}
@@ -174,6 +250,8 @@ const TypographySection: React.FC<TypographySectionProps> = ({
       </div>
     </div>
   )
-}
+})
+
+TypographySection.displayName = 'TypographySection'
 
 export default TypographySection 

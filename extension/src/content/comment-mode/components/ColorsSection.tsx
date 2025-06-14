@@ -22,7 +22,50 @@ interface ColorsSectionProps {
   onBackgroundColorChange: (color: string) => void
 }
 
-const ColorsSection: React.FC<ColorsSectionProps> = ({
+// Extract styles to prevent recreation on every render
+const styles = {
+  sectionTitle: {
+    fontSize: '12px',
+    fontWeight: '600' as const,
+    color: '#9ca3af',
+    marginBottom: '12px',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.5px'
+  },
+  container: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '8px'
+  },
+  row: {
+    display: 'flex',
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const
+  },
+  label: {
+    fontSize: '11px',
+    color: '#9ca3af'
+  },
+  colorContainer: {
+    display: 'flex',
+    alignItems: 'center' as const,
+    gap: '8px'
+  },
+  colorSwatch: {
+    width: '16px',
+    height: '16px',
+    borderRadius: '3px',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    flexShrink: 0
+  },
+  value: {
+    fontSize: '11px',
+    color: 'white',
+    fontFamily: 'monospace'
+  }
+} as const
+
+const ColorsSection: React.FC<ColorsSectionProps> = React.memo(({
   selectedElement,
   designProperties,
   isDesignMode,
@@ -32,23 +75,27 @@ const ColorsSection: React.FC<ColorsSectionProps> = ({
   onTextColorChange,
   onBackgroundColorChange
 }) => {
+  // Memoize expensive variable display calculations
+  const textColorDisplay = React.useMemo(() => 
+    getColorVariableDisplayInfo(selectedElement.element as HTMLElement, 'color', designProperties.colors.color),
+    [selectedElement.element, designProperties.colors.color]
+  )
+
+  const backgroundColorDisplay = React.useMemo(() => 
+    getColorVariableDisplayInfo(selectedElement.element as HTMLElement, 'background-color', designProperties.colors.backgroundColor),
+    [selectedElement.element, designProperties.colors.backgroundColor]
+  )
+
   return (
     <div>
-      <div style={{ 
-        fontSize: '12px', 
-        fontWeight: '600', 
-        color: '#9ca3af', 
-        marginBottom: '12px',
-        textTransform: 'uppercase',
-        letterSpacing: '0.5px'
-      }}>
+      <div style={styles.sectionTitle}>
         Colors
       </div>
       
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: '11px', color: '#9ca3af' }}>Text</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div style={styles.container}>
+        <div style={styles.row}>
+          <span style={styles.label}>Text</span>
+          <div style={styles.colorContainer}>
             {isDesignMode && hasTextContent ? (
               <input
                 type="color"
@@ -58,23 +105,19 @@ const ColorsSection: React.FC<ColorsSectionProps> = ({
               />
             ) : (
               <div style={{ 
-                width: '16px', 
-                height: '16px', 
-                borderRadius: '3px', 
-                backgroundColor: designProperties.colors.color,
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                flexShrink: 0
+                ...styles.colorSwatch,
+                backgroundColor: designProperties.colors.color
               }} />
             )}
-            <span style={{ fontSize: '11px', color: 'white', fontFamily: 'monospace' }}>
-              <VariableDisplay {...getColorVariableDisplayInfo(selectedElement.element as HTMLElement, 'color', designProperties.colors.color)} />
+            <span style={styles.value}>
+              <VariableDisplay {...textColorDisplay} />
             </span>
           </div>
         </div>
         
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: '11px', color: '#9ca3af' }}>Background</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={styles.row}>
+          <span style={styles.label}>Background</span>
+          <div style={styles.colorContainer}>
             {isDesignMode ? (
               <input
                 type="color"
@@ -84,22 +127,20 @@ const ColorsSection: React.FC<ColorsSectionProps> = ({
               />
             ) : (
               <div style={{ 
-                width: '16px', 
-                height: '16px', 
-                borderRadius: '3px', 
-                backgroundColor: designProperties.colors.backgroundColor,
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                flexShrink: 0
+                ...styles.colorSwatch,
+                backgroundColor: designProperties.colors.backgroundColor
               }} />
             )}
-            <span style={{ fontSize: '11px', color: 'white', fontFamily: 'monospace' }}>
-              <VariableDisplay {...getColorVariableDisplayInfo(selectedElement.element as HTMLElement, 'background-color', designProperties.colors.backgroundColor)} />
+            <span style={styles.value}>
+              <VariableDisplay {...backgroundColorDisplay} />
             </span>
           </div>
         </div>
       </div>
     </div>
   )
-}
+})
+
+ColorsSection.displayName = 'ColorsSection'
 
 export default ColorsSection 

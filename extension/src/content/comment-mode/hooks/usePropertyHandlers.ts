@@ -4,7 +4,8 @@ import { rgbToHex } from '../utils/cssVariables'
 
 export const usePropertyHandlers = (
   selectedElement: SelectedRegion,
-  logDesignChange: (property: string, currentValue: string, originalValue?: string) => void
+  logDesignChange: (property: string, currentValue: string, originalValue?: string) => void,
+  isDesignMode: boolean = false
 ) => {
   const [currentFontSize, setCurrentFontSize] = React.useState<string>('')
   const [currentFontWeight, setCurrentFontWeight] = React.useState<string>('')
@@ -13,8 +14,14 @@ export const usePropertyHandlers = (
   const [currentBackgroundColor, setCurrentBackgroundColor] = React.useState<string>('')
   const [currentPadding, setCurrentPadding] = React.useState<string>('')
   const [currentBorderRadius, setCurrentBorderRadius] = React.useState<string>('')
-  const [currentlyEditing, setCurrentlyEditing] = React.useState<HTMLElement | null>(null)
-  const [originalContent, setOriginalContent] = React.useState<string>('')
+  
+  // Use refs instead of state for text editing to avoid unnecessary re-renders
+  const currentlyEditingRef = React.useRef<HTMLElement | null>(null)
+  const originalContentRef = React.useRef<string>('')
+  const eventListenersRef = React.useRef<{
+    keydown?: (e: KeyboardEvent) => void
+    blur?: () => void
+  }>({})
 
   // Initialize state when element changes
   React.useEffect(() => {
@@ -31,7 +38,8 @@ export const usePropertyHandlers = (
       setCurrentBorderRadius(computedStyle.borderRadius.replace('px', ''))
       
       // Stop any existing editing when element changes
-      if (currentlyEditing) {
+      if (currentlyEditingRef.current) {
+        console.log('🔄 Element changed, finishing existing text edit')
         finishTextEdit(true)
       }
     }
@@ -43,11 +51,80 @@ export const usePropertyHandlers = (
     return text.trim().length > 0 && !hasChildElements
   }
 
-  const makeElementEditable = (element: HTMLElement) => {
-    if (!element || currentlyEditing) return
+  const cleanupEventListeners = (element: HTMLElement) => {
+    const listeners = eventListenersRef.current
+    if (listeners.keydown) {
+      element.removeEventListener('keydown', listeners.keydown)
+    }
+    if (listeners.blur) {
+      element.removeEventListener('blur', listeners.blur)
+    }
+    eventListenersRef.current = {}
+  }
+
+  const finishTextEdit = React.useCallback((save: boolean) => {
+    const element = currentlyEditingRef.current
+    if (!element) return
+
+    try {
+      const newContent = element.textContent || ''
+      const originalContent = originalContentRef.current
+
+      console.log(`🏁 Finishing text edit (save: ${save})`, { 
+        original: originalContent, 
+        new: newContent,
+        element: element.tagName
+      })
+
+      // Remove editing styles and attributes
+      element.contentEditable = 'false'
+      element.style.removeProperty('cursor')
+      element.style.removeProperty('outline')
+      element.style.removeProperty('outline-offset')
+      element.style.removeProperty('background-color')
+
+      // Clean up event listeners
+      cleanupEventListeners(element)
+
+      // If not saving, restore original content
+      if (!save) {
+        element.textContent = originalContent
+        console.log('📝 Text edit cancelled, restored original content:', originalContent)
+      } else if (originalContent !== newContent) {
+        // Log the change if saved and different
+        logDesignChange('Text Content', newContent, originalContent)
+        console.log('📝 ✅ Text edited and tracked as design change:')
+        console.log('Element:', element.tagName)
+        console.log('Original:', originalContent)
+        console.log('New:', newContent)
+        console.log('Change logged successfully!')
+        console.log('---')
+      } else {
+        console.log('📝 No change detected, skipping design change log')
+      }
+    } catch (error) {
+      console.error('Error finishing text edit:', error)
+    }
+
+    // Reset refs
+    currentlyEditingRef.current = null
+    originalContentRef.current = ''
+  }, [logDesignChange])
+
+  const makeElementEditable = React.useCallback((element: HTMLElement) => {
+    if (!element || currentlyEditingRef.current || !isDesignMode) {
+      console.log('❌ Cannot make element editable:', { 
+        hasElement: !!element, 
+        currentlyEditing: !!currentlyEditingRef.current, 
+        isDesignMode 
+      })
+      return
+    }
     
-    setCurrentlyEditing(element)
-    setOriginalContent(element.textContent || '')
+    console.log('✏️ Making element editable:', element.tagName, element.textContent)
+    const textContent = element.textContent || ''
+    currentlyEditingRef.current = element
+    originalContentRef.current = textContent
 
     try {
       // Make element editable with visual feedback
@@ -58,101 +135,99 @@ export const usePropertyHandlers = (
       element.style.setProperty('background-color', 'rgba(59, 130, 246, 0.05)', 'important')
       element.focus()
 
-      // Handle keyboard events
+      // Create event handlers
       const handleKeyDown = (e: KeyboardEvent) => {
+        console.log('⌨️ Key pressed in text edit:', e.key)
         if (e.key === 'Escape') {
+          console.log('❌ Escape pressed, cancelling edit')
           finishTextEdit(false)
           e.preventDefault()
           e.stopPropagation()
         } else if (e.key === 'Enter' && !e.shiftKey) {
+          console.log('✅ Enter pressed, saving edit')
           finishTextEdit(true)
           e.preventDefault()
           e.stopPropagation()
         }
       }
 
-      // Handle blur
-      const handleBlur = () => finishTextEdit(true)
+      const handleBlur = () => {
+        console.log('👁️ Element lost focus, saving edit')
+        finishTextEdit(true)
+      }
+
+      // Store event listeners in ref for cleanup
+      eventListenersRef.current = {
+        keydown: handleKeyDown,
+        blur: handleBlur
+      }
 
       element.addEventListener('keydown', handleKeyDown)
-      element.addEventListener('blur', handleBlur, { once: true })
+      element.addEventListener('blur', handleBlur)
 
-      // Store event listeners for cleanup
-      element.setAttribute('data-editing-listeners', 'true')
-      ;(element as any).__keydownHandler = handleKeyDown
+      console.log('✅ Element made editable successfully')
     } catch (error) {
       console.error('Error making element editable:', error)
-      setCurrentlyEditing(null)
-      setOriginalContent('')
+      currentlyEditingRef.current = null
+      originalContentRef.current = ''
     }
-  }
+  }, [isDesignMode, finishTextEdit])
 
-  const finishTextEdit = (save: boolean) => {
-    if (!currentlyEditing) return
-
-    try {
-      const element = currentlyEditing
-      const newContent = element.textContent || ''
-
-      // Remove editing styles and attributes
-      element.contentEditable = 'false'
-      element.style.removeProperty('cursor')
-      element.style.removeProperty('outline')
-      element.style.removeProperty('outline-offset')
-      element.style.removeProperty('background-color')
-
-      // Remove event listeners
-      if ((element as any).__keydownHandler) {
-        element.removeEventListener('keydown', (element as any).__keydownHandler)
-        delete (element as any).__keydownHandler
-      }
-      element.removeAttribute('data-editing-listeners')
-
-      // If not saving, restore original content
-      if (!save) {
-        element.textContent = originalContent
-      } else if (originalContent !== newContent) {
-        // Log the change if saved and different
-        logDesignChange('Text Content', newContent, originalContent)
-        console.log('📝 Text edited in comment mode:')
-        console.log('Element:', element)
-        console.log('Original:', originalContent)
-        console.log('New:', newContent)
-        console.log('---')
-      }
-    } catch (error) {
-      console.error('Error finishing text edit:', error)
-    }
-
-    setCurrentlyEditing(null)
-    setOriginalContent('')
-  }
-
-  // Add click handler for text elements when design mode is active
+  // Single useEffect for all cleanup scenarios
   React.useEffect(() => {
+    const cleanup = () => {
+      if (currentlyEditingRef.current) {
+        console.log('🧹 Cleaning up text edit state')
+        finishTextEdit(false)
+      }
+    }
+
+    // Cleanup when design mode is disabled
+    if (!isDesignMode) {
+      cleanup()
+    }
+
+    // Cleanup on unmount
+    return cleanup
+  }, [isDesignMode, finishTextEdit])
+
+  // Single useEffect for click handler management
+  React.useEffect(() => {
+    if (!isDesignMode || selectedElement.type !== 'element' || !selectedElement.element) {
+      return
+    }
+
+    const element = selectedElement.element as HTMLElement
+    
+    // Only add click handler if it's a text element
+    if (!isTextElement(element)) {
+      return
+    }
+
     const handleElementClick = (e: Event) => {
       const mouseEvent = e as MouseEvent
-      // Only handle clicks on the selected element when it's a text element
-      if (selectedElement.type === 'element' && selectedElement.element && 
-          mouseEvent.target === selectedElement.element && 
-          isTextElement(selectedElement.element as HTMLElement) &&
-          !currentlyEditing) {
-        
-        mouseEvent.preventDefault()
-        mouseEvent.stopPropagation()
-        makeElementEditable(selectedElement.element as HTMLElement)
-      }
+      console.log('🖱️ Text element clicked, making editable')
+      mouseEvent.preventDefault()
+      mouseEvent.stopPropagation()
+      makeElementEditable(element)
     }
 
-    if (selectedElement.type === 'element' && selectedElement.element) {
-      const element = selectedElement.element
-      element.addEventListener('click', handleElementClick, { capture: true })
-      
-      return () => {
-        element.removeEventListener('click', handleElementClick, { capture: true })
-      }
+    console.log('📝 Adding click listener to text element:', element.tagName)
+    element.addEventListener('click', handleElementClick, { capture: true })
+    
+    return () => {
+      console.log('🧹 Removing click listener from element')
+      element.removeEventListener('click', handleElementClick, { capture: true })
     }
-  }, [selectedElement, currentlyEditing])
+  }, [selectedElement, isDesignMode, makeElementEditable])
+
+  // Force cleanup function that can be called externally
+  const forceCleanupTextEdit = React.useCallback(() => {
+    if (currentlyEditingRef.current) {
+      console.log('🧹 Force cleaning up text edit state')
+      finishTextEdit(false)
+    }
+  }, [finishTextEdit])
 
   const handleFontSizeChange = (newSize: string) => {
     if (selectedElement.type === 'element' && selectedElement.element) {
@@ -267,6 +342,7 @@ export const usePropertyHandlers = (
     handlePaddingChange,
     handleBorderRadiusChange,
     hasTextContent,
-    isCurrentlyEditingText: !!currentlyEditing
+    isCurrentlyEditingText: !!currentlyEditingRef.current,
+    forceCleanupTextEdit
   }
 } 
