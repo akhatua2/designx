@@ -8,14 +8,8 @@ import { slackModeManager, type SlackUser, type SlackMessage, SlackBubble } from
 import { jiraModeManager, type JiraUser, type JiraIssue, JiraBubble } from './integrations/jira'
 import { googleAuthManager, type GoogleUser } from './integrations/google/GoogleAuthManager'
 import type { Project } from './integrations/IntegrationManager'
+import type { DesignChange } from './comment-mode/hooks/useDesignChanges'
 import UserBubble from './UserBubble'
-
-interface DesignChange {
-  property: string
-  oldValue: string
-  newValue: string
-  timestamp: string
-}
 
 // Inline styles to ensure the component works exactly as before
 const styles = {

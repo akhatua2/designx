@@ -1,16 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { X, Github, Slack } from 'lucide-react'
 import type { SelectedRegion } from './CommentModeManager'
+import type { DesignChange } from './hooks/useDesignChanges'
 import GitHubIssueForm from './GitHubIssueForm'
 import SlackMessageForm from './SlackMessageForm'
 import JiraIssueForm from './JiraIssueForm'
-
-interface DesignChange {
-  property: string
-  oldValue: string
-  newValue: string
-  timestamp: string
-}
 
 interface CommentBubbleProps {
   selectedElement: SelectedRegion | null

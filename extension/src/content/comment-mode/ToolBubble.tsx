@@ -1,14 +1,8 @@
 import React from 'react'
 import { ArrowDownToLine, Eye, EyeOff, Paintbrush, Loader2, X } from 'lucide-react'
 import type { SelectedRegion } from './CommentModeManager'
+import type { DesignChange } from './hooks/useDesignChanges'
 import DesignPropertiesPanel from './DesignPropertiesPanel'
-
-interface DesignChange {
-  property: string
-  oldValue: string
-  newValue: string
-  timestamp: string
-}
 
 interface ToolBubbleProps {
   selectedElement: SelectedRegion | null

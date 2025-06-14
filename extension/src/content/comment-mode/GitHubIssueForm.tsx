@@ -1,16 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Send, Github, ChevronDown } from 'lucide-react'
 import type { SelectedRegion } from './CommentModeManager'
+import type { DesignChange } from './hooks/useDesignChanges'
 import { ScreenshotCapture } from './ScreenshotCapture'
 import { gitHubModeManager } from '../integrations/github'
 import type { GitHubRepo } from '../integrations/github/GitHubModeManager'
-
-interface DesignChange {
-  property: string
-  oldValue: string
-  newValue: string
-  timestamp: string
-}
 
 interface GitHubIssueFormProps {
   selectedElement: SelectedRegion
@@ -187,7 +181,7 @@ ${JSON.stringify(selectedElement.reactInfo.hooks, null, 2)}
 The following design changes were suggested for this element:
 
 ${designChanges.map((change, index) => 
-  `${index + 1}. **${change.property}**: ${change.oldValue} → ${change.newValue}`
+      `${index + 1}. **${change.property}**: ${change.originalValue} → ${change.currentValue}`
 ).join('\n')}
 
 ---` : ''
