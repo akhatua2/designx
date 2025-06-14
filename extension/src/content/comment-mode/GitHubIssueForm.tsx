@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Send, Github, ChevronDown } from 'lucide-react'
+import { Send, Github, ChevronDown, Camera, X } from 'lucide-react'
 import type { SelectedElement } from './CommentModeManager'
 import { ScreenshotCapture } from './ScreenshotCapture'
 import { gitHubModeManager } from '../integrations/github'
 import type { GitHubRepo } from '../integrations/github/GitHubModeManager'
+import { commentModeManager } from './CommentModeManager'
 
 interface GitHubIssueFormProps {
   selectedElement: SelectedElement
@@ -29,6 +30,8 @@ const GitHubIssueForm: React.FC<GitHubIssueFormProps> = ({
   const [isCreating, setIsCreating] = useState(false)
   const [priority, setPriority] = useState<'Low' | 'Medium' | 'High' | 'Critical'>('Medium')
   const [figmaLink, setFigmaLink] = useState('')
+  const [isSelectionMode, setIsSelectionMode] = useState(false)
+  const [additionalScreenshots, setAdditionalScreenshots] = useState<string[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const priorityDropdownRef = useRef<HTMLDivElement>(null)
@@ -82,6 +85,49 @@ const GitHubIssueForm: React.FC<GitHubIssueFormProps> = ({
       textarea.style.height = `${newHeight}px`
     }
   }, [comment])
+
+  // Set up element capture callback for selection mode
+  useEffect(() => {
+    const handleElementCapture = async (elementData: SelectedElement) => {
+      try {
+        console.log('📸 Capturing screenshot for selected element...')
+        const result = await ScreenshotCapture.captureElement({
+          element: elementData.element
+        })
+        if (result.success && result.imageUrl) {
+          console.log('✅ Additional screenshot captured:', result.imageUrl)
+          setAdditionalScreenshots(prev => [...prev, result.imageUrl!])
+          onScreenshotUploaded(result.imageUrl)
+        } else {
+          console.warn('⚠️ Screenshot capture failed:', result.error)
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to capture screenshot:', error)
+      }
+    }
+
+    commentModeManager.onElementCaptured(handleElementCapture)
+    
+    return () => {
+      // Clean up callback on unmount
+      commentModeManager.onElementCaptured(() => {})
+    }
+  }, [onScreenshotUploaded])
+
+  const handleStartSelection = () => {
+    setIsSelectionMode(true)
+    commentModeManager.enterSelectionMode()
+  }
+
+  const handleStopSelection = () => {
+    console.log('🛑 Stopping selection mode...')
+    setIsSelectionMode(false)
+    commentModeManager.exitSelectionMode()
+  }
+
+  const handleRemoveScreenshot = (index: number) => {
+    setAdditionalScreenshots(prev => prev.filter((_, i) => i !== index))
+  }
 
   const handleSubmit = async () => {
     if (!comment.trim() || !selectedRepo) return
@@ -368,6 +414,76 @@ ${reactSection}
     return gitHubModeManager.isUserAuthenticated() ? 'Select repository' : 'Sign in to GitHub to create issues'
   }
 
+  const screenshotSectionStyles = {
+    marginTop: '8px',
+    padding: '8px',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: '6px',
+    border: '1px solid rgba(255, 255, 255, 0.1)'
+  }
+
+  const screenshotHeaderStyles = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: '6px'
+  }
+
+  const screenshotButtonStyles = {
+    padding: '4px 8px',
+    borderRadius: '4px',
+    border: 'none',
+    fontSize: '10px',
+    fontWeight: '500',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    transition: 'all 0.2s ease',
+    backgroundColor: isSelectionMode ? '#ef4444' : 'rgba(34, 197, 94, 0.8)',
+    color: 'white'
+  }
+
+  const thumbnailGridStyles = {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(60px, 1fr))',
+    gap: '4px',
+    marginTop: '6px'
+  }
+
+  const thumbnailStyles = {
+    position: 'relative' as const,
+    width: '60px',
+    height: '40px',
+    borderRadius: '4px',
+    overflow: 'hidden',
+    border: '1px solid rgba(255, 255, 255, 0.2)'
+  }
+
+  const thumbnailImageStyles = {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover' as const,
+    cursor: 'pointer'
+  }
+
+  const removeButtonStyles = {
+    position: 'absolute' as const,
+    top: '2px',
+    right: '2px',
+    width: '16px',
+    height: '16px',
+    borderRadius: '50%',
+    backgroundColor: 'rgba(239, 68, 68, 0.9)',
+    border: 'none',
+    color: 'white',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '8px'
+  }
+
   return (
     <>
       <style>
@@ -398,32 +514,27 @@ ${reactSection}
         <div style={rowStyles}>
           <span style={labelStyles}>PRIORITY</span>
           <div style={priorityContainerStyles} ref={priorityDropdownRef}>
-            <span
-              style={priorityTagStyles}
+            <div
               className="priority-tag"
+              style={priorityTagStyles}
               onClick={() => setIsPriorityDropdownOpen(!isPriorityDropdownOpen)}
             >
               {priority}
-            </span>
+            </div>
+
             {isPriorityDropdownOpen && (
               <div style={priorityDropdownStyles}>
-                {(['Low', 'Medium', 'High', 'Critical'] as const).map((option) => (
+                {(['Low', 'Medium', 'High', 'Critical'] as const).map((p) => (
                   <div
-                    key={option}
+                    key={p}
                     className="priority-option"
-                    style={priorityOptionStyles(option)}
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      setPriority(option)
+                    style={priorityOptionStyles(p)}
+                    onClick={() => {
+                      setPriority(p)
                       setIsPriorityDropdownOpen(false)
                     }}
-                    onClick={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                    }}
                   >
-                    {option}
+                    {p}
                   </div>
                 ))}
               </div>
@@ -437,11 +548,85 @@ ${reactSection}
             type="text"
             value={figmaLink}
             onChange={(e) => setFigmaLink(e.target.value)}
-            placeholder="Paste Figma link here..."
-            style={figmaInputStyles}
+            placeholder="Paste Figma link (optional)"
+            style={{
+              flex: 1,
+              padding: '4px 8px',
+              borderRadius: '4px',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              backgroundColor: 'rgba(255, 255, 255, 0.05)',
+              color: 'white',
+              fontSize: '10px',
+              outline: 'none',
+              transition: 'all 0.2s ease'
+            }}
             className="github-figma-input"
           />
         </div>
+      </div>
+
+      {/* Screenshot Section */}
+      <div style={screenshotSectionStyles}>
+        <div style={screenshotHeaderStyles}>
+          <span style={{ fontSize: '10px', fontWeight: '500', color: 'rgba(255, 255, 255, 0.7)' }}>
+            SCREENSHOTS
+          </span>
+          <button
+            onMouseDown={() => {
+              if (isSelectionMode) {
+                console.log('🖱️ Done button mousedown - setting allow flag')
+                commentModeManager.allowNextClickToPassThrough()
+              }
+            }}
+            onClick={() => {
+              console.log('🖱️ Done button clicked')
+              if (isSelectionMode) {
+                handleStopSelection()
+              } else {
+                handleStartSelection()
+              }
+            }}
+            style={screenshotButtonStyles}
+            onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+            onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+          >
+            <Camera size={12} />
+            {isSelectionMode ? 'Done' : 'Add More'}
+          </button>
+        </div>
+        
+        {additionalScreenshots.length > 0 && (
+          <div style={thumbnailGridStyles}>
+            {additionalScreenshots.map((url, index) => (
+              <div key={index} style={thumbnailStyles}>
+                <img
+                  src={url}
+                  alt={`Screenshot ${index + 1}`}
+                  style={thumbnailImageStyles}
+                  onClick={() => window.open(url, '_blank')}
+                />
+                <button
+                  onClick={() => handleRemoveScreenshot(index)}
+                  style={removeButtonStyles}
+                  title="Remove screenshot"
+                >
+                  <X size={8} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        
+        {additionalScreenshots.length === 0 && (
+          <div style={{ 
+            fontSize: '9px', 
+            color: 'rgba(255, 255, 255, 0.4)', 
+            textAlign: 'center' as const,
+            padding: '8px 0'
+          }}>
+            Click "Add More" to capture additional screenshots
+          </div>
+        )}
       </div>
 
       <textarea
@@ -459,6 +644,7 @@ ${reactSection}
           <button
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             style={repoButtonStyles}
+            className="github-select"
           >
             <Github size={12} />
             {selectedRepo ? selectedRepo.full_name : getAuthPrompt()}
@@ -474,7 +660,7 @@ ${reactSection}
               ) : (
                 repos.map((repo) => (
                   <div
-                    key={repo.full_name}
+                    key={repo.id}
                     className="repo-item"
                     style={repoItemStyles}
                     onMouseDown={(e) => {
@@ -487,9 +673,9 @@ ${reactSection}
                       e.preventDefault()
                       e.stopPropagation()
                     }}
-                  >
-                    {repo.full_name}
-                  </div>
+                                      >
+                      {repo.full_name}
+                    </div>
                 ))
               )}
             </div>
@@ -500,8 +686,17 @@ ${reactSection}
           onClick={handleSubmit}
           disabled={!comment.trim() || !selectedRepo || isCreating}
           style={submitButtonStyles}
+          onMouseEnter={(e) => {
+            if (!e.currentTarget.disabled) {
+              e.currentTarget.style.backgroundColor = 'rgba(34, 197, 94, 0.9)'
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!e.currentTarget.disabled) {
+              e.currentTarget.style.backgroundColor = 'rgba(34, 197, 94, 0.8)'
+            }
+          }}
         >
-          <Send size={12} />
           {isCreating ? 'Creating...' : 'Create Issue'}
         </button>
       </div>

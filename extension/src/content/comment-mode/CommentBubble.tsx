@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { X, Github, Slack } from 'lucide-react'
 import type { SelectedElement } from './CommentModeManager'
+import { commentModeManager } from './CommentModeManager'
 import GitHubIssueForm from './GitHubIssueForm'
 import SlackMessageForm from './SlackMessageForm'
 import JiraIssueForm from './JiraIssueForm'
@@ -126,13 +127,21 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
     }
     
     setComment('')
+    handleClose()
+  }
+
+  const handleClose = () => {
+    // Exit selection mode if active
+    if (commentModeManager.isInSelectionMode()) {
+      commentModeManager.exitSelectionMode()
+    }
     onClose()
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
       e.preventDefault()
-      onClose()
+      handleClose()
     }
   }
 
@@ -229,7 +238,7 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
           }
         `}
       </style>
-      <div style={bubbleStyles} data-floating-icon="true">
+      <div style={bubbleStyles} data-floating-icon="true" data-comment-bubble="true">
         <div style={headerStyles}>
           <div style={platformSelectorStyles}>
             <button
@@ -269,7 +278,7 @@ const CommentBubble: React.FC<CommentBubbleProps> = ({
               </div>
             )}
             <button
-              onClick={onClose}
+              onClick={handleClose}
               style={closeButtonStyles}
               onMouseEnter={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)'}
               onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)'}
