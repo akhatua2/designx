@@ -1,5 +1,5 @@
 import React from 'react'
-import { ArrowDownToLine, Eye, EyeOff, Paintbrush, Loader2, X } from 'lucide-react'
+import { ArrowDownToLine, Eye, EyeOff, Paintbrush, Loader2, X, GripVertical, Minus, Plus } from 'lucide-react'
 import type { SelectedRegion } from './CommentModeManager'
 import type { DesignChange } from './hooks/useDesignChanges'
 import DesignPropertiesPanel from './DesignPropertiesPanel'
@@ -18,6 +18,9 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
   if (!selectedElement) return null
 
   const [isDesignMode, setIsDesignMode] = React.useState(false)
+  const [dragOffset, setDragOffset] = React.useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = React.useState(false)
+  const [isMinimized, setIsMinimized] = React.useState(false)
 
   const handleDesignChanges = (changes: DesignChange[]) => {
     console.log('🔄 Design changes received in ToolBubble:', changes)
@@ -27,9 +30,9 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
   }
 
   // Smart positioning that avoids CommentBubble and stays in viewport
-  const getPosition = () => {
+  const getPosition = React.useCallback(() => {
     const bubbleWidth = 300
-    const bubbleHeight = 500 // Estimated height for collision detection
+    const bubbleHeight = 500 // Use full height for collision detection, regardless of minimize state
     const spacing = 20
     const viewportPadding = 10
     
@@ -119,16 +122,52 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
       left: viewportPadding,
       side: 'fallback' as const
     }
+  }, [selectedElement])
+
+  // Memoize position to prevent recalculation during design changes
+  const basePosition = React.useMemo(() => getPosition(), [getPosition])
+  
+  // Apply drag offset to base position
+  const position = {
+    ...basePosition,
+    top: basePosition.top + dragOffset.y,
+    left: basePosition.left + dragOffset.x
   }
 
-  const position = getPosition()
+  // Drag handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault() // Prevent text selection
+    e.stopPropagation() // Prevent other handlers
+    setIsDragging(true)
+    
+    const startX = e.clientX - dragOffset.x
+    const startY = e.clientY - dragOffset.y
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      e.preventDefault()
+      setDragOffset({
+        x: e.clientX - startX,
+        y: e.clientY - startY
+      })
+    }
+    
+    const handleMouseUp = (e: MouseEvent) => {
+      e.preventDefault()
+      setIsDragging(false)
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+    
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }
 
   const bubbleStyles = {
     position: 'fixed' as const,
     top: `${position.top}px`,
     left: `${position.left}px`,
     width: '300px',
-    maxHeight: '500px', // Increased to fit all design properties without scrolling
+    maxHeight: isMinimized ? '60px' : '500px',
     borderRadius: '12px',
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
     backdropFilter: 'blur(12px)',
@@ -136,21 +175,35 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
     border: '1px solid rgba(255, 255, 255, 0.12)',
     boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
     color: 'white',
-    padding: '10px',
+    padding: isMinimized ? '10px 10px 0px 10px' : '10px',
     zIndex: 10001, // Higher than CommentBubble (10000) and overlay
-    animation: 'slideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+    animation: isDragging ? 'none' : 'slideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
     pointerEvents: 'auto' as const,
     overflow: 'hidden',
     display: 'flex',
-    flexDirection: 'column' as const
+    flexDirection: 'column' as const,
+    transition: 'max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+    transform: isMinimized ? 'scale(0.98)' : 'scale(1)',
+    ...(isDragging && { userSelect: 'none' as const }) // Prevent text selection while dragging
   }
 
   const headerStyles = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '8px',
+    marginBottom: isMinimized ? '0' : '8px',
     flexShrink: 0
+  }
+
+  const dragHandleStyles = {
+    cursor: isDragging ? 'grabbing' : 'grab',
+    padding: '4px',
+    color: 'rgba(255, 255, 255, 0.5)',
+    display: 'flex',
+    alignItems: 'center',
+    borderRadius: '4px',
+    transition: 'color 0.2s ease',
+    userSelect: 'none' as const // Prevent text selection
   }
 
   const handleSave = () => {
@@ -171,6 +224,11 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
     setIsDesignMode(!isDesignMode)
   }
 
+  const handleMinimize = () => {
+    console.log('📦 Minimize toggled:', !isMinimized)
+    setIsMinimized(!isMinimized)
+  }
+
   const handleClose = () => {
     console.log('❌ Close selection clicked')
     if (onClose) {
@@ -186,18 +244,18 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
             from {
               opacity: 0;
               transform: ${
-                position.side === 'right' ? 'translateX(10px)' :
-                position.side === 'left' ? 'translateX(-10px)' :
-                position.side === 'top' ? 'translateY(-10px)' :
-                position.side === 'bottom' ? 'translateY(10px)' :
+                basePosition.side === 'right' ? 'translateX(10px)' :
+                basePosition.side === 'left' ? 'translateX(-10px)' :
+                basePosition.side === 'top' ? 'translateY(-10px)' :
+                basePosition.side === 'bottom' ? 'translateY(10px)' :
                 'scale(0.95)'
               };
             }
             to {
               opacity: 1;
               transform: ${
-                position.side === 'right' || position.side === 'left' ? 'translateX(0)' :
-                position.side === 'top' || position.side === 'bottom' ? 'translateY(0)' :
+                basePosition.side === 'right' || basePosition.side === 'left' ? 'translateX(0)' :
+                basePosition.side === 'top' || basePosition.side === 'bottom' ? 'translateY(0)' :
                 'scale(1)'
               };
             }
@@ -247,9 +305,24 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
         `}
       </style>
       <div style={bubbleStyles} data-floating-icon="true">
-        {/* Header with 3 action icons and close button */}
+        {/* Header with drag handle, action icons and close button */}
         <div style={headerStyles}>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {/* Drag Handle */}
+            <div
+              onMouseDown={handleMouseDown}
+              style={dragHandleStyles}
+              title="Drag to move"
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'rgba(255, 255, 255, 0.8)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'rgba(255, 255, 255, 0.5)'
+              }}
+            >
+              <GripVertical size={14} />
+            </div>
+
             {/* Save Icon */}
             <button
               className={`tool-button ${isSaving ? 'saving' : ''}`}
@@ -322,42 +395,84 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
             </button>
           </div>
 
-          {/* Close Button */}
-          <button
-            className="tool-button"
-            onClick={handleClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'rgba(255, 255, 255, 0.6)',
-              cursor: 'pointer',
-              padding: '6px',
-              borderRadius: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all 0.2s ease'
-            }}
-            title="Close selection"
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)'
-              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)'
-              e.currentTarget.style.backgroundColor = 'transparent'
-            }}
-          >
-            <X size={14} fill="none" />
-          </button>
+          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+            {/* Minimize/Maximize Button */}
+            <button
+              className="tool-button"
+              onClick={handleMinimize}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'rgba(255, 255, 255, 0.6)',
+                cursor: 'pointer',
+                padding: '6px',
+                borderRadius: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s ease'
+              }}
+              title={isMinimized ? 'Expand' : 'Minimize'}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)'
+                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)'
+                e.currentTarget.style.backgroundColor = 'transparent'
+              }}
+            >
+              {isMinimized ? <Plus size={14} fill="none" /> : <Minus size={14} fill="none" />}
+            </button>
+
+            {/* Close Button */}
+            <button
+              className="tool-button"
+              onClick={handleClose}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'rgba(255, 255, 255, 0.6)',
+                cursor: 'pointer',
+                padding: '6px',
+                borderRadius: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s ease'
+              }}
+              title="Close selection"
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)'
+                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)'
+                e.currentTarget.style.backgroundColor = 'transparent'
+              }}
+            >
+              <X size={14} fill="none" />
+            </button>
+          </div>
         </div>
         
-        {/* Design Properties Panel */}
-        <DesignPropertiesPanel 
-          selectedElement={selectedElement}
-          isDesignMode={isDesignMode}
-          onDesignChange={handleDesignChanges}
-        />
+        {/* Design Properties Panel - Always render but animate visibility */}
+        <div style={{
+          opacity: isMinimized ? 0 : 1,
+          transform: isMinimized ? 'translateY(-10px)' : 'translateY(0)',
+          transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          pointerEvents: isMinimized ? 'none' : 'auto',
+          flex: 1,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column' as const
+        }}>
+          <DesignPropertiesPanel 
+            selectedElement={selectedElement}
+            isDesignMode={isDesignMode}
+            onDesignChange={handleDesignChanges}
+          />
+        </div>
       </div>
     </>
   )
