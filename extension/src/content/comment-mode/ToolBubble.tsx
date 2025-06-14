@@ -40,6 +40,41 @@ interface DesignProperties {
 const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSaving = false, onXRay, isXRayActive = false, onClose }) => {
   if (!selectedElement) return null
 
+  const [isDesignMode, setIsDesignMode] = React.useState(false)
+  const [currentFontSize, setCurrentFontSize] = React.useState<string>('')
+
+  // Initialize font size when element changes
+  React.useEffect(() => {
+    if (selectedElement.type === 'element' && selectedElement.element) {
+      const element = selectedElement.element as HTMLElement
+      const computedStyle = window.getComputedStyle(element)
+      const fontSize = computedStyle.fontSize.replace('px', '')
+      setCurrentFontSize(fontSize)
+    }
+  }, [selectedElement])
+
+  // Handle font size changes
+  const handleFontSizeChange = (newSize: string) => {
+    if (selectedElement.type !== 'element' || !selectedElement.element) return
+    
+    const element = selectedElement.element as HTMLElement
+    const sizeValue = parseInt(newSize)
+    
+    if (!isNaN(sizeValue) && sizeValue > 0) {
+      element.style.fontSize = `${sizeValue}px`
+      setCurrentFontSize(newSize)
+      console.log('🎨 Font size changed to:', `${sizeValue}px`)
+    }
+  }
+
+  // Check if element has text content
+  const hasTextContent = () => {
+    if (selectedElement.type !== 'element' || !selectedElement.element) return false
+    const element = selectedElement.element as HTMLElement
+    const textContent = element.textContent?.trim()
+    return textContent && textContent.length > 0
+  }
+
   // Extract design properties from the selected element
   const getDesignProperties = (): DesignProperties | null => {
     if (selectedElement.type !== 'element' || !selectedElement.element) return null
@@ -275,8 +310,8 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
   }
 
   const handleDesign = () => {
-    console.log('🎨 Design icon clicked (placeholder)')
-    // This is just a placeholder for now
+    console.log('🎨 Design mode toggled:', !isDesignMode)
+    setIsDesignMode(!isDesignMode)
   }
 
   const handleClose = () => {
@@ -352,6 +387,28 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
             animation: shimmer 1.5s infinite;
             pointer-events: none;
           }
+          
+          /* Custom slider styling */
+          input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #60a5fa;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+          }
+          
+          input[type="range"]::-moz-range-thumb {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #60a5fa;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+          }
         `}
       </style>
       <div style={bubbleStyles} data-floating-icon="true">
@@ -407,23 +464,24 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
               </button>
             )}
 
-            {/* Design Icon (placeholder) */}
+            {/* Design Icon */}
             <button
               className="tool-button"
               onClick={handleDesign}
               style={{
                 background: 'none',
                 border: 'none',
-                color: '#9ca3af',
+                color: isDesignMode ? '#60a5fa' : '#9ca3af',
                 cursor: 'pointer',
                 padding: '6px',
                 borderRadius: '4px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                transition: 'background-color 0.2s ease'
+                transition: 'background-color 0.2s ease',
+                backgroundColor: isDesignMode ? 'rgba(96, 165, 250, 0.2)' : 'transparent'
               }}
-              title="Design (placeholder)"
+              title={isDesignMode ? 'Exit design mode' : 'Enter design mode'}
             >
               <Paintbrush size={16} fill="none" />
             </button>
@@ -493,9 +551,34 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSavi
                 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: '11px', color: '#9ca3af' }}>Size</span>
-                  <span style={{ fontSize: '11px', color: 'white' }}>
-                    {formatValue(designProperties.typography.fontSize)}
-                  </span>
+                  {isDesignMode && hasTextContent() ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, justifyContent: 'flex-end' }}>
+                      <input
+                        type="range"
+                        value={currentFontSize}
+                        onChange={(e) => handleFontSizeChange(e.target.value)}
+                        min="8"
+                        max="72"
+                        style={{
+                          width: '80px',
+                          height: '3px',
+                          borderRadius: '2px',
+                          background: 'rgba(255, 255, 255, 0.2)',
+                          outline: 'none',
+                          cursor: 'pointer',
+                          appearance: 'none',
+                          WebkitAppearance: 'none'
+                        }}
+                      />
+                      <span style={{ fontSize: '11px', color: 'white', minWidth: '30px', textAlign: 'right' }}>
+                        {currentFontSize}px
+                      </span>
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: '11px', color: 'white' }}>
+                      {formatValue(designProperties.typography.fontSize)}
+                    </span>
+                  )}
                 </div>
                 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
