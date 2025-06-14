@@ -23,43 +23,44 @@ const styles = {
     border: '1px solid rgba(255, 255, 255, 0.1)',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     padding: '0 8px',
     boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.2)',
-    transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+    transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1), border-radius 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
     pointerEvents: 'auto' as const,
     overflow: 'hidden',
     position: 'relative' as const
   },
   menuButtonCollapsed: {
     width: '44px',
-    borderRadius: '50%',
-    justifyContent: 'center',
-    padding: '0'
+    borderRadius: '50%'
   },
   menuButtonExpanded: {
     width: '250px',
-    borderRadius: '22px',
-    justifyContent: 'space-between',
-    padding: '0 8px'
+    borderRadius: '22px'
   },
   iconsContainer: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
-    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+    overflow: 'hidden',
+    maxWidth: 0,
     opacity: 0,
     transform: 'scale(0.8)',
+    transition: 'max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
     pointerEvents: 'none' as const
   },
   iconsContainerVisible: {
-    display: 'flex',
     opacity: 1,
     transform: 'scale(1)',
+    maxWidth: '200px',
     pointerEvents: 'auto' as const
   },
   iconsContainerHidden: {
-    display: 'none'
+    maxWidth: 0,
+    opacity: 0,
+    transform: 'scale(0.8)',
+    pointerEvents: 'none' as const
   },
   iconButton: {
     background: 'none',
