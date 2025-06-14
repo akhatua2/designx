@@ -1,6 +1,7 @@
 // React JSX transform handles React import automatically
 import { createRoot } from 'react-dom/client'
 import FloatingIcon from './FloatingIcon'
+import DraggableWrapper from './DraggableWrapper'
 import './content.css'
 
 // Function to inject the floating icon with Shadow DOM encapsulation
@@ -14,8 +15,8 @@ function injectFloatingIcon() {
   shadowHost.setAttribute('data-extension-id', 'designx-floating-icon')
   shadowHost.style.cssText = `
     position: fixed;
-    bottom: 20px;
-    right: 20px;
+    top: 0px;
+    left: 0px;
     z-index: 2147483647;
     pointer-events: none;
     width: 0;
@@ -71,8 +72,8 @@ function injectFloatingIcon() {
   reactContainer.id = 'floating-extension-icon'
   reactContainer.style.cssText = `
     position: fixed;
-    bottom: 20px;
-    right: 20px;
+    top: 0px;
+    left: 0px;
     z-index: 2147483647;
     pointer-events: none;
   `
@@ -83,7 +84,11 @@ function injectFloatingIcon() {
 
   // Create React root and render our component
   const root = createRoot(reactContainer)
-  root.render(<FloatingIcon />)
+  root.render(
+    <DraggableWrapper>
+      <FloatingIcon />
+    </DraggableWrapper>
+  )
 
   console.log('🎯 DesignX overlay injected with Shadow DOM encapsulation')
 }
