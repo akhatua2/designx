@@ -103,6 +103,7 @@ const FloatingIcon: React.FC = () => {
   const [selectedElement, setSelectedElement] = useState<SelectedRegion | null>(null)
   const [isHovered, setIsHovered] = useState(false)
   const [showUserBubble, setShowUserBubble] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   
   // Google Auth state
   const [isGoogleAuthenticated, setIsGoogleAuthenticated] = useState(false)
@@ -421,7 +422,9 @@ const FloatingIcon: React.FC = () => {
   }
 
   const handleToolSave = async () => {
-    if (!selectedElement) return
+    if (!selectedElement || isSaving) return
+    
+    setIsSaving(true)
     
     try {
       console.log('💾 Starting screenshot capture for save...')
@@ -447,10 +450,17 @@ const FloatingIcon: React.FC = () => {
         const a = document.createElement('a')
         a.href = url
         
-        // Generate filename based on selection
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-        const selectionType = selectedElement.type
-        const filename = `designx-${selectionType}-${timestamp}.png`
+        // Generate a user-friendly filename
+        const date = new Date().toLocaleDateString('en-US', { 
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        }).toLowerCase().replace(/,/g, '')
+        const time = new Date().toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit'
+        }).toLowerCase().replace(/:/g, '-')
+        const filename = `screenshot-${date}-${time}.png`
         
         a.download = filename
         document.body.appendChild(a)
@@ -466,6 +476,8 @@ const FloatingIcon: React.FC = () => {
     } catch (error) {
       console.error('❌ Error saving screenshot:', error)
       alert('Error saving screenshot. Please try again.')
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -475,6 +487,7 @@ const FloatingIcon: React.FC = () => {
         <ToolBubble
           selectedElement={selectedElement}
           onSave={handleToolSave}
+          isSaving={isSaving}
         />
       )}
       

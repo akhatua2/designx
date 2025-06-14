@@ -4,9 +4,10 @@ import type { SelectedRegion } from './CommentModeManager'
 interface ToolBubbleProps {
   selectedElement: SelectedRegion | null
   onSave: () => void
+  isSaving?: boolean
 }
 
-const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave }) => {
+const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave, isSaving = false }) => {
   if (!selectedElement) return null
 
   // Calculate position based on selection type - position to the right or left
@@ -116,14 +117,18 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave }) => {
     color: 'white',
     fontSize: '11px',
     fontWeight: '500',
-    cursor: 'pointer',
+    cursor: isSaving ? 'default' : 'pointer',
     display: 'flex',
     alignItems: 'center',
     gap: '6px',
-    transition: 'background-color 0.2s ease'
+    transition: 'background-color 0.2s ease',
+    opacity: isSaving ? 0.7 : 1,
+    position: 'relative' as const,
+    overflow: 'hidden'
   }
 
   const handleSave = () => {
+    if (isSaving) return // Prevent multiple clicks while saving
     console.log('💾 Save clicked for:', selectedElement.type)
     onSave()
   }
@@ -143,8 +148,33 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave }) => {
             }
           }
           
-          .tool-button:hover {
+          @keyframes shimmer {
+            0% {
+              transform: translateX(-100%);
+            }
+            100% {
+              transform: translateX(100%);
+            }
+          }
+          
+          .tool-button:hover:not(.saving) {
             background-color: rgba(255, 255, 255, 0.1) !important;
+          }
+          
+          .shimmer-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(
+              90deg,
+              transparent,
+              rgba(255, 255, 255, 0.2),
+              transparent
+            );
+            animation: shimmer 1.5s infinite;
+            pointer-events: none;
           }
         `}
       </style>
@@ -157,16 +187,18 @@ const ToolBubble: React.FC<ToolBubbleProps> = ({ selectedElement, onSave }) => {
         
         <div style={{ maxHeight: '280px', overflow: 'auto' }}>
           <button
-            className="tool-button"
+            className={`tool-button ${isSaving ? 'saving' : ''}`}
             onClick={handleSave}
             style={buttonStyles}
+            disabled={isSaving}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
               <polyline points="17,21 17,13 7,13 7,21"/>
               <polyline points="7,3 7,8 15,8"/>
             </svg>
-            Save Selection
+            {isSaving ? 'Saving...' : 'Save'}
+            {isSaving && <div className="shimmer-overlay" />}
           </button>
         </div>
       </div>
